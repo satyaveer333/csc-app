@@ -1,0 +1,9 @@
+.git
+.gitignore
+.dockerignore
+*.sqlite
+data/*.sqlite
+uploads/prints/*
+!uploads/prints/.gitkeep
+uploads/forms/*
+!uploads/forms/.gitkeep

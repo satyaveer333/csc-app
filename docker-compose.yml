@@ -1,0 +1,9 @@
+services:
+  csc-web:
+    build: .
+    container_name: csc-app-container
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/var/www/html
+    restart: unless-stopped
