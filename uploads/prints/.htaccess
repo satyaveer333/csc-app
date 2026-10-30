@@ -1,0 +1,9 @@
+# Deny all direct web access to customer uploaded documents
+# Documents can only be viewed by authenticated CSC owners through /owner/download.php
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

@@ -18,14 +18,25 @@ if (empty($query)) {
 
 $pdo = getDbConnection();
 
+$rawDigits = preg_replace('/[^0-9]/', '', $query);
+$upperQuery = strtoupper($query);
+$phoneSuffix = strlen($rawDigits) >= 10 ? substr($rawDigits, -10) : $rawDigits;
+
 $stmt = $pdo->prepare("
     SELECT token_id, customer_name, customer_phone, print_type, sides, paper_size, copies, status, estimated_amount, created_at, files_json
     FROM print_orders
-    WHERE token_id = :q OR customer_phone = :q
+    WHERE UPPER(token_id) = :upperQ 
+       OR customer_phone = :q 
+       OR (LENGTH(:digits) >= 10 AND REPLACE(customer_phone, ' ', '') LIKE :likePhone)
     ORDER BY id DESC
     LIMIT 5
 ");
-$stmt->execute([':q' => $query]);
+$stmt->execute([
+    ':upperQ' => $upperQuery,
+    ':q' => $query,
+    ':digits' => $rawDigits,
+    ':likePhone' => '%' . $phoneSuffix
+]);
 $orders = $stmt->fetchAll();
 
 if (empty($orders)) {
@@ -38,12 +49,12 @@ foreach ($orders as $o) {
     $files = json_decode($o['files_json'], true) ?: [];
     $formatted[] = [
         'token_id' => $o['token_id'],
-        'customer_name' => $o['customer_name'],
-        'print_type' => $o['print_type'],
-        'sides' => $o['sides'],
-        'paper_size' => $o['paper_size'],
-        'copies' => $o['copies'],
-        'status' => ucfirst($o['status']),
+        'customer_name' => htmlspecialchars($o['customer_name'], ENT_QUOTES, 'UTF-8'),
+        'print_type' => htmlspecialchars($o['print_type'], ENT_QUOTES, 'UTF-8'),
+        'sides' => htmlspecialchars($o['sides'], ENT_QUOTES, 'UTF-8'),
+        'paper_size' => htmlspecialchars($o['paper_size'], ENT_QUOTES, 'UTF-8'),
+        'copies' => (int)$o['copies'],
+        'status' => ucfirst(htmlspecialchars($o['status'], ENT_QUOTES, 'UTF-8')),
         'file_count' => count($files),
         'estimated_amount' => formatCurrency($o['estimated_amount']),
         'created_at' => date('d M Y, h:i A', strtotime($o['created_at']))

@@ -54,14 +54,14 @@ $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
                     <i data-lucide="boxes" class="w-4 h-4 text-amber-400"></i>
                     <span>CSC Inventory</span>
                     <?php if ($lowStockCount > 0): ?>
-                        <span class="px-1.5 py-0.2 rounded-full text-xs font-bold bg-amber-500 text-slate-900"><?= $lowStockCount ?></span>
+                        <span class="px-1.5 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-slate-900"><?= $lowStockCount ?></span>
                     <?php endif; ?>
                 </a>
                 <a href="print_orders.php" class="px-3 py-2 rounded-lg transition <?= $currentPage === 'print_orders.php' ? 'bg-slate-800 text-white font-semibold' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?> flex items-center gap-1.5">
                     <i data-lucide="printer" class="w-4 h-4 text-cyan-400"></i>
                     <span>Print Orders</span>
                     <?php if ($pendingPrintCount > 0): ?>
-                        <span class="px-1.5 py-0.2 rounded-full text-xs font-bold bg-cyan-400 text-slate-900"><?= $pendingPrintCount ?></span>
+                        <span class="px-1.5 py-0.5 rounded-full text-xs font-bold bg-cyan-400 text-slate-900"><?= $pendingPrintCount ?></span>
                     <?php endif; ?>
                 </a>
                 <a href="settings.php" class="px-3 py-2 rounded-lg transition <?= $currentPage === 'settings.php' ? 'bg-slate-800 text-white font-semibold' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?> flex items-center gap-1.5">

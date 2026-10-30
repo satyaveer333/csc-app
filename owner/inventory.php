@@ -19,6 +19,13 @@ $action = $_POST['action'] ?? $_GET['action'] ?? 'list';
 // Handle Actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
+    // Verify CSRF Token
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        setFlash('danger', 'Security validation failed (Invalid CSRF Token). Please try again.');
+        header('Location: inventory.php');
+        exit;
+    }
+
     // 1. ADD NEW INVENTORY ITEM
     if ($action === 'create') {
         $itemName = trim($_POST['item_name'] ?? '');
@@ -101,11 +108,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)$_POST['id'];
         $delta = (int)$_POST['delta'];
         if ($id > 0 && $delta !== 0) {
-            $stmt = $pdo->prepare("
-                UPDATE inventory 
-                SET quantity = MAX(0, quantity + :delta), updated_at = CURRENT_TIMESTAMP 
-                WHERE id = :id
-            ");
+            $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+            $sql = ($driver === 'sqlite')
+                ? "UPDATE inventory SET quantity = MAX(0, quantity + :delta), updated_at = datetime('now') WHERE id = :id"
+                : "UPDATE inventory SET quantity = GREATEST(0, CAST(quantity AS SIGNED) + :delta), updated_at = CURRENT_TIMESTAMP WHERE id = :id";
+            $stmt = $pdo->prepare($sql);
             $stmt->execute([':delta' => $delta, ':id' => $id]);
             setFlash('success', 'Stock quantity adjusted.');
         }
@@ -304,6 +311,7 @@ $flash = getFlash();
                                         <div class="flex items-center gap-1.5">
                                             <!-- -1 -->
                                             <form method="POST" class="inline-block">
+                                                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                                 <input type="hidden" name="action" value="quick_stock_adjust">
                                                 <input type="hidden" name="id" value="<?= $item['id'] ?>">
                                                 <input type="hidden" name="delta" value="-1">
@@ -313,6 +321,7 @@ $flash = getFlash();
                                             </form>
                                             <!-- +1 -->
                                             <form method="POST" class="inline-block">
+                                                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                                 <input type="hidden" name="action" value="quick_stock_adjust">
                                                 <input type="hidden" name="id" value="<?= $item['id'] ?>">
                                                 <input type="hidden" name="delta" value="1">
@@ -322,6 +331,7 @@ $flash = getFlash();
                                             </form>
                                             <!-- +5 / +10 Quick Restock -->
                                             <form method="POST" class="inline-block">
+                                                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                                 <input type="hidden" name="action" value="quick_stock_adjust">
                                                 <input type="hidden" name="id" value="<?= $item['id'] ?>">
                                                 <input type="hidden" name="delta" value="5">
@@ -354,6 +364,7 @@ $flash = getFlash();
                                                 <i data-lucide="pencil" class="w-4 h-4"></i>
                                             </button>
                                             <form method="POST" onsubmit="return confirm('Do you want to remove this inventory item?');" class="inline-block">
+                                                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                                 <input type="hidden" name="action" value="delete">
                                                 <input type="hidden" name="id" value="<?= $item['id'] ?>">
                                                 <button type="submit" class="p-2 rounded-lg bg-red-950/60 hover:bg-red-800 text-red-300 transition" title="Delete Item">
@@ -386,6 +397,7 @@ $flash = getFlash();
             </div>
 
             <form method="POST" id="inventoryForm" class="p-6 space-y-4">
+                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                 <input type="hidden" name="action" id="invAction" value="create">
                 <input type="hidden" name="id" id="invId" value="">
 

@@ -19,6 +19,13 @@ $action = $_POST['action'] ?? '';
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
+    // Verify CSRF Token
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        setFlash('danger', 'Security validation failed (Invalid CSRF Token). Please try again.');
+        header('Location: print_orders.php');
+        exit;
+    }
+
     // Update order status
     if ($action === 'update_status') {
         $orderId = (int)$_POST['order_id'];
@@ -57,21 +64,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Filter by status tab
+// Filter by status tab & order ID
 $selectedStatus = $_GET['status'] ?? 'all';
 $searchQuery = trim($_GET['q'] ?? '');
+$filterOrderId = (int)($_GET['order'] ?? 0);
 
 $sql = "SELECT * FROM print_orders";
 $params = [];
 $where = [];
 
-if ($selectedStatus !== 'all') {
-    $where[] = "status = :status";
-    $params[':status'] = $selectedStatus;
-}
-if (!empty($searchQuery)) {
-    $where[] = "(token_id LIKE :q OR customer_name LIKE :q OR customer_phone LIKE :q)";
-    $params[':q'] = "%$searchQuery%";
+if ($filterOrderId > 0) {
+    $where[] = "id = :filter_order_id";
+    $params[':filter_order_id'] = $filterOrderId;
+} else {
+    if ($selectedStatus !== 'all') {
+        $where[] = "status = :status";
+        $params[':status'] = $selectedStatus;
+    }
+    if (!empty($searchQuery)) {
+        $where[] = "(token_id LIKE :q OR customer_name LIKE :q OR customer_phone LIKE :q)";
+        $params[':q'] = "%$searchQuery%";
+    }
 }
 if (!empty($where)) {
     $sql .= " WHERE " . implode(" AND ", $where);
@@ -89,6 +102,7 @@ $counts = [
     'processing' => (int)$pdo->query("SELECT COUNT(*) FROM print_orders WHERE status = 'processing'")->fetchColumn(),
     'ready' => (int)$pdo->query("SELECT COUNT(*) FROM print_orders WHERE status = 'ready'")->fetchColumn(),
     'delivered' => (int)$pdo->query("SELECT COUNT(*) FROM print_orders WHERE status = 'delivered'")->fetchColumn(),
+    'cancelled' => (int)$pdo->query("SELECT COUNT(*) FROM print_orders WHERE status = 'cancelled'")->fetchColumn(),
 ];
 
 $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
@@ -145,6 +159,9 @@ $flash = getFlash();
                 <a href="print_orders.php?status=delivered" class="px-3.5 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'delivered' ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700' ?>">
                     Delivered (<?= $counts['delivered'] ?>)
                 </a>
+                <a href="print_orders.php?status=cancelled" class="px-3.5 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'cancelled' ? 'bg-red-950/80 border border-red-800 text-red-300' : 'bg-slate-800 text-slate-400 hover:bg-slate-700' ?>">
+                    Cancelled (<?= $counts['cancelled'] ?>)
+                </a>
             </div>
 
             <form method="GET" class="relative w-full md:w-80">
@@ -156,6 +173,13 @@ $flash = getFlash();
                 <?php endif; ?>
             </form>
         </div>
+
+        <?php if ($filterOrderId > 0): ?>
+            <div class="p-3 bg-blue-950/70 border border-blue-800 rounded-xl text-xs text-blue-200 flex items-center justify-between">
+                <span>Filtering by single order ID: <strong>#<?= $filterOrderId ?></strong></span>
+                <a href="print_orders.php" class="font-bold underline hover:text-white">View All Orders</a>
+            </div>
+        <?php endif; ?>
 
         <!-- Orders Grid / Cards -->
         <?php if (empty($orders)): ?>
@@ -198,6 +222,7 @@ $flash = getFlash();
                             <!-- Status Dropdown / Action -->
                             <div class="flex items-center gap-2">
                                 <form method="POST" class="flex items-center gap-2">
+                                    <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                     <input type="hidden" name="action" value="update_status">
                                     <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
                                     <select name="status" onchange="this.form.submit()" class="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-white focus:ring-2 focus:ring-blue-500 cursor-pointer">
@@ -217,6 +242,7 @@ $flash = getFlash();
 
                                 <!-- Delete -->
                                 <form method="POST" onsubmit="return confirm('Do you want to permanently delete this order and its uploaded documents?');" class="inline-block">
+                                    <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                     <input type="hidden" name="action" value="delete_order">
                                     <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
                                     <button type="submit" class="p-1.5 rounded-xl bg-slate-700 hover:bg-red-800 text-slate-400 hover:text-white transition" title="Delete Order">

@@ -240,6 +240,7 @@ $flash = getFlash();
                                         </div>
                                     </div>
                                     <form method="POST" action="inventory.php">
+                                        <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                         <input type="hidden" name="action" value="quick_stock_adjust">
                                         <input type="hidden" name="id" value="<?= $item['id'] ?>">
                                         <input type="hidden" name="delta" value="5">

@@ -20,19 +20,34 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 ensureDirectories();
 $pdo = getDbConnection();
 
-// Validate Customer Inputs
-$customerName = trim($_POST['customer_name'] ?? '');
-$customerPhone = trim($_POST['customer_phone'] ?? '');
-$customerEmail = trim($_POST['customer_email'] ?? '');
-$printType = trim($_POST['print_type'] ?? 'B&W');
-$sides = trim($_POST['sides'] ?? 'Single Sided');
-$paperSize = trim($_POST['paper_size'] ?? 'A4');
-$copies = max(1, intval($_POST['copies'] ?? 1));
-$notes = trim($_POST['notes'] ?? '');
+// Validate and sanitize Customer Inputs
+$customerName = trim(strip_tags($_POST['customer_name'] ?? ''));
+$customerPhone = trim(strip_tags($_POST['customer_phone'] ?? ''));
+$customerEmail = trim(strip_tags($_POST['customer_email'] ?? ''));
+$printType = in_array($_POST['print_type'] ?? '', ['B&W', 'Color']) ? $_POST['print_type'] : 'B&W';
+$sides = in_array($_POST['sides'] ?? '', ['Single Sided', 'Both Sided (Duplex)']) ? $_POST['sides'] : 'Single Sided';
+$paperSize = in_array($_POST['paper_size'] ?? '', ['A4', 'Legal', 'Glossy Photo Paper', 'A3']) ? $_POST['paper_size'] : 'A4';
+$copies = max(1, min(100, intval($_POST['copies'] ?? 1)));
+$notes = trim(strip_tags($_POST['notes'] ?? ''));
 
 if (empty($customerName) || empty($customerPhone)) {
     echo json_encode(['success' => false, 'message' => 'Please provide your Full Name and Mobile Number.']);
     exit;
+}
+
+if (!empty($customerEmail) && !filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+    echo json_encode(['success' => false, 'message' => 'Please provide a valid email address or leave it blank.']);
+    exit;
+}
+
+// Helper to cleanup uploaded files if batch fails
+function cleanupTempFiles($files) {
+    foreach ($files as $f) {
+        $path = PRINTS_DIR . '/' . basename($f['stored_name']);
+        if (file_exists($path)) {
+            @unlink($path);
+        }
+    }
 }
 
 // Check if files were uploaded
@@ -56,17 +71,20 @@ for ($i = 0; $i < $totalFiles; $i++) {
     }
 
     if ($fileErr !== UPLOAD_ERR_OK) {
+        cleanupTempFiles($uploadedFiles);
         echo json_encode(['success' => false, 'message' => "Error uploading file '{$fileName}'. Error code: {$fileErr}"]);
         exit;
     }
 
     if ($fileSize > MAX_FILE_SIZE) {
+        cleanupTempFiles($uploadedFiles);
         echo json_encode(['success' => false, 'message' => "File '{$fileName}' exceeds the maximum allowed size (25MB)."]);
         exit;
     }
 
     $ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
     if (!in_array($ext, $allowedExts)) {
+        cleanupTempFiles($uploadedFiles);
         echo json_encode(['success' => false, 'message' => "File format '.{$ext}' is not supported. Allowed formats: " . implode(', ', $allowedExts)]);
         exit;
     }
@@ -76,6 +94,7 @@ for ($i = 0; $i < $totalFiles; $i++) {
     $targetPath = PRINTS_DIR . '/' . $safeName;
 
     if (!move_uploaded_file($fileTmp, $targetPath)) {
+        cleanupTempFiles($uploadedFiles);
         echo json_encode(['success' => false, 'message' => "Could not save uploaded document '{$fileName}'. Please check permissions."]);
         exit;
     }

@@ -20,6 +20,28 @@ $editId = (int)($_GET['edit_id'] ?? 0);
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
+    // Verify CSRF Token
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        setFlash('danger', 'Security validation failed (Invalid CSRF Token). Please try again.');
+        header('Location: forms.php');
+        exit;
+    }
+    
+    // Helper to upload form attachments
+    $uploadAttachment = function() {
+        if (!empty($_FILES['attachment_file']['name']) && $_FILES['attachment_file']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['attachment_file']['name'], PATHINFO_EXTENSION));
+            $allowed = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+            if (in_array($ext, $allowed) && $_FILES['attachment_file']['size'] <= MAX_FILE_SIZE) {
+                $safeName = 'form_' . date('Ymd_His') . '_' . bin2hex(random_bytes(3)) . '.' . $ext;
+                if (move_uploaded_file($_FILES['attachment_file']['tmp_name'], FORMS_DIR . '/' . $safeName)) {
+                    return $safeName;
+                }
+            }
+        }
+        return null;
+    };
+
     // 1. ADD NEW FORM
     if ($action === 'create') {
         $title = trim($_POST['title'] ?? '');
@@ -33,17 +55,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $lastDate = !empty($_POST['last_date']) ? $_POST['last_date'] : null;
         $officialUrl = trim($_POST['official_url'] ?? '');
         $status = $_POST['status'] ?? 'active';
+        $attachmentFile = $uploadAttachment() ?: '';
 
         if (!empty($title) && !empty($category)) {
             $stmt = $pdo->prepare("
                 INSERT INTO forms (
                     title, category, department, summary, eligibility, 
                     required_documents, fee_details, start_date, last_date, 
-                    official_url, status, created_at, updated_at
+                    official_url, attachment_file, status, created_at, updated_at
                 ) VALUES (
                     :title, :category, :department, :summary, :eligibility, 
                     :required_documents, :fee_details, :start_date, :last_date, 
-                    :official_url, :status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    :official_url, :attachment_file, :status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
             ");
             $stmt->execute([
@@ -57,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':start_date' => $startDate,
                 ':last_date' => $lastDate,
                 ':official_url' => $officialUrl,
+                ':attachment_file' => $attachmentFile,
                 ':status' => $status
             ]);
             setFlash('success', 'New form notification added successfully!');
@@ -81,38 +105,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $lastDate = !empty($_POST['last_date']) ? $_POST['last_date'] : null;
         $officialUrl = trim($_POST['official_url'] ?? '');
         $status = $_POST['status'] ?? 'active';
+        $newAttachment = $uploadAttachment();
 
         if ($id > 0 && !empty($title)) {
-            $stmt = $pdo->prepare("
-                UPDATE forms SET 
-                    title = :title, 
-                    category = :category, 
-                    department = :department, 
-                    summary = :summary, 
-                    eligibility = :eligibility, 
-                    required_documents = :required_documents, 
-                    fee_details = :fee_details, 
-                    start_date = :start_date, 
-                    last_date = :last_date, 
-                    official_url = :official_url, 
-                    status = :status,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
-            ");
-            $stmt->execute([
-                ':id' => $id,
-                ':title' => $title,
-                ':category' => $category,
-                ':department' => $department,
-                ':summary' => $summary,
-                ':eligibility' => $eligibility,
-                ':required_documents' => $requiredDocs,
-                ':fee_details' => $feeDetails,
-                ':start_date' => $startDate,
-                ':last_date' => $lastDate,
-                ':official_url' => $officialUrl,
-                ':status' => $status
-            ]);
+            if ($newAttachment) {
+                // Delete previous attachment if exists
+                $prev = $pdo->prepare("SELECT attachment_file FROM forms WHERE id = :id");
+                $prev->execute([':id' => $id]);
+                $oldFile = $prev->fetchColumn();
+                if ($oldFile && file_exists(FORMS_DIR . '/' . $oldFile)) {
+                    @unlink(FORMS_DIR . '/' . $oldFile);
+                }
+
+                $stmt = $pdo->prepare("
+                    UPDATE forms SET 
+                        title = :title, 
+                        category = :category, 
+                        department = :department, 
+                        summary = :summary, 
+                        eligibility = :eligibility, 
+                        required_documents = :required_documents, 
+                        fee_details = :fee_details, 
+                        start_date = :start_date, 
+                        last_date = :last_date, 
+                        official_url = :official_url,
+                        attachment_file = :attachment_file,
+                        status = :status,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                ");
+                $stmt->execute([
+                    ':id' => $id,
+                    ':title' => $title,
+                    ':category' => $category,
+                    ':department' => $department,
+                    ':summary' => $summary,
+                    ':eligibility' => $eligibility,
+                    ':required_documents' => $requiredDocs,
+                    ':fee_details' => $feeDetails,
+                    ':start_date' => $startDate,
+                    ':last_date' => $lastDate,
+                    ':official_url' => $officialUrl,
+                    ':attachment_file' => $newAttachment,
+                    ':status' => $status
+                ]);
+            } else {
+                $stmt = $pdo->prepare("
+                    UPDATE forms SET 
+                        title = :title, 
+                        category = :category, 
+                        department = :department, 
+                        summary = :summary, 
+                        eligibility = :eligibility, 
+                        required_documents = :required_documents, 
+                        fee_details = :fee_details, 
+                        start_date = :start_date, 
+                        last_date = :last_date, 
+                        official_url = :official_url, 
+                        status = :status,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                ");
+                $stmt->execute([
+                    ':id' => $id,
+                    ':title' => $title,
+                    ':category' => $category,
+                    ':department' => $department,
+                    ':summary' => $summary,
+                    ':eligibility' => $eligibility,
+                    ':required_documents' => $requiredDocs,
+                    ':fee_details' => $feeDetails,
+                    ':start_date' => $startDate,
+                    ':last_date' => $lastDate,
+                    ':official_url' => $officialUrl,
+                    ':status' => $status
+                ]);
+            }
             setFlash('success', 'Form details updated successfully!');
         }
         header('Location: forms.php');
@@ -123,6 +191,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete') {
         $id = (int)$_POST['id'];
         if ($id > 0) {
+            $prev = $pdo->prepare("SELECT attachment_file FROM forms WHERE id = :id");
+            $prev->execute([':id' => $id]);
+            $oldFile = $prev->fetchColumn();
+            if ($oldFile && file_exists(FORMS_DIR . '/' . $oldFile)) {
+                @unlink(FORMS_DIR . '/' . $oldFile);
+            }
+
             $stmt = $pdo->prepare("DELETE FROM forms WHERE id = :id");
             $stmt->execute([':id' => $id]);
             setFlash('success', 'Form deleted successfully.');
@@ -267,6 +342,7 @@ $flash = getFlash();
                                     </td>
                                     <td class="px-4 py-4 text-center whitespace-nowrap">
                                         <form method="POST" class="inline-block">
+                                            <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                             <input type="hidden" name="action" value="toggle_status">
                                             <input type="hidden" name="id" value="<?= $f['id'] ?>">
                                             <input type="hidden" name="current_status" value="<?= $f['status'] ?>">
@@ -283,6 +359,7 @@ $flash = getFlash();
                                             </button>
                                             <!-- Delete -->
                                             <form method="POST" onsubmit="return confirm('Are you sure you want to delete this form?');" class="inline-block">
+                                                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                                 <input type="hidden" name="action" value="delete">
                                                 <input type="hidden" name="id" value="<?= $f['id'] ?>">
                                                 <button type="submit" class="p-2 rounded-lg bg-red-950/60 hover:bg-red-800 text-red-300 transition" title="Delete Form">
@@ -314,7 +391,8 @@ $flash = getFlash();
                 </button>
             </div>
 
-            <form method="POST" id="formPostForm" class="p-6 space-y-4">
+            <form method="POST" id="formPostForm" enctype="multipart/form-data" class="p-6 space-y-4">
+                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                 <input type="hidden" name="action" id="formAction" value="<?= $editForm ? 'update' : 'create' ?>">
                 <input type="hidden" name="id" id="formId" value="<?= $editForm['id'] ?? '' ?>">
 
@@ -403,6 +481,14 @@ $flash = getFlash();
                     </div>
                 </div>
 
+                <!-- Attachment Upload -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Official Notification Document (PDF, Word, or Image - Optional)</label>
+                    <input type="file" name="attachment_file" id="inpAttachment" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                           class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500">
+                    <p id="attachmentInfo" class="text-xs text-blue-400 mt-1 hidden"></p>
+                </div>
+
                 <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-700">
                     <button type="button" onclick="closeFormModal()" class="px-5 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-semibold transition">
                         Cancel
@@ -433,6 +519,8 @@ $flash = getFlash();
             document.getElementById('formId').value = '';
             document.getElementById('modalHeading').querySelector('span').textContent = 'Post New Government / Vacancy Form';
             document.getElementById('formPostForm').reset();
+            const attInfo = document.getElementById('attachmentInfo');
+            if (attInfo) attInfo.classList.add('hidden');
             document.getElementById('modalFormContainer').classList.remove('hidden');
         }
 
@@ -456,6 +544,16 @@ $flash = getFlash();
             document.getElementById('inpFee').value = form.fee_details || '';
             document.getElementById('inpUrl').value = form.official_url || '';
             document.getElementById('inpStatus').value = form.status || 'active';
+
+            const attInfo = document.getElementById('attachmentInfo');
+            if (attInfo) {
+                if (form.attachment_file) {
+                    attInfo.textContent = 'Current Attachment: ' + form.attachment_file + ' (choose file above to replace)';
+                    attInfo.classList.remove('hidden');
+                } else {
+                    attInfo.classList.add('hidden');
+                }
+            }
 
             document.getElementById('modalFormContainer').classList.remove('hidden');
         }

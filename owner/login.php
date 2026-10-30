@@ -19,6 +19,9 @@ if (isOwnerLoggedIn()) {
 }
 
 $error = '';
+if (isset($_GET['timeout'])) {
+    $error = 'Your session has expired due to 30 minutes of inactivity. Please log in again.';
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');

@@ -16,11 +16,14 @@ function ensureDirectories() {
     }
 }
 
-function getSettings($pdo = null) {
+function getSettings($pdo = null, $invalidate = false) {
     if (!$pdo) {
         $pdo = getDbConnection();
     }
     static $settingsCache = null;
+    if ($invalidate) {
+        $settingsCache = null;
+    }
     if ($settingsCache !== null) {
         return $settingsCache;
     }
@@ -42,12 +45,6 @@ function updateSetting($key, $value, $pdo = null) {
     if (!$pdo) {
         $pdo = getDbConnection();
     }
-    $stmt = $pdo->prepare("
-        INSERT INTO settings (setting_key, setting_value, updated_at) 
-        VALUES (:k, :v, CURRENT_TIMESTAMP)
-        ON DUPLICATE KEY UPDATE setting_value = :v, updated_at = CURRENT_TIMESTAMP
-    ");
-    // SQLite syntax vs MySQL
     $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
     if ($driver === 'sqlite') {
         $stmt = $pdo->prepare("
@@ -55,8 +52,16 @@ function updateSetting($key, $value, $pdo = null) {
             VALUES (:k, :v, datetime('now'))
             ON CONFLICT(setting_key) DO UPDATE SET setting_value = :v, updated_at = datetime('now')
         ");
+    } else {
+        $stmt = $pdo->prepare("
+            INSERT INTO settings (setting_key, setting_value, updated_at) 
+            VALUES (:k, :v, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE setting_value = :v, updated_at = CURRENT_TIMESTAMP
+        ");
     }
-    return $stmt->execute([':k' => $key, ':v' => $value]);
+    $result = $stmt->execute([':k' => $key, ':v' => $value]);
+    getSettings($pdo, true); // Invalidate cache so updated value is immediately available
+    return $result;
 }
 
 function e($string) {

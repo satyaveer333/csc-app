@@ -19,6 +19,13 @@ $action = $_POST['action'] ?? '';
 // Handle Form Submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
+    // Verify CSRF Token
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        setFlash('danger', 'Security validation failed (Invalid CSRF Token). Please try again.');
+        header('Location: settings.php');
+        exit;
+    }
+    
     // 1. UPDATE CENTER PROFILE
     if ($action === 'update_profile') {
         updateSetting('center_name', trim($_POST['center_name'] ?? ''), $pdo);
@@ -91,7 +98,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $confirmPass = $_POST['confirm_password'] ?? '';
 
         $storedHash = getSetting('admin_password', '', $pdo);
-        if (!password_verify($currentPass, $storedHash) && $currentPass !== DEFAULT_ADMIN_PASS) {
+        $isValidCurrent = !empty($storedHash) ? password_verify($currentPass, $storedHash) : ($currentPass === DEFAULT_ADMIN_PASS);
+
+        if (!$isValidCurrent) {
             setFlash('danger', 'Current password is incorrect.');
         } elseif (strlen($newPass) < 6) {
             setFlash('danger', 'New password must be at least 6 characters long.');
@@ -148,6 +157,7 @@ $flash = getFlash();
             </h2>
 
             <form method="POST" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                 <input type="hidden" name="action" value="update_profile">
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -203,6 +213,7 @@ $flash = getFlash();
                     <span>Email & Print Notification Settings</span>
                 </h2>
                 <form method="POST" class="inline-block">
+                    <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                     <input type="hidden" name="action" value="test_email">
                     <button type="submit" class="px-3.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-lg text-emerald-300 border border-emerald-800 flex items-center gap-1.5 transition">
                         <i data-lucide="send" class="w-3.5 h-3.5"></i>
@@ -216,6 +227,7 @@ $flash = getFlash();
             </p>
 
             <form method="POST" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                 <input type="hidden" name="action" value="update_email">
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -287,6 +299,7 @@ $flash = getFlash();
             </h2>
 
             <form method="POST" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                 <input type="hidden" name="action" value="update_pricing">
 
                 <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
@@ -333,6 +346,7 @@ $flash = getFlash();
             </h2>
 
             <form method="POST" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                 <input type="hidden" name="action" value="change_password">
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">

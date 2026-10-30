@@ -13,13 +13,14 @@ ensureDirectories();
 $pdo = getDbConnection();
 $settings = getSettings($pdo);
 
-// Fetch all active forms
+// Fetch all active forms (using cross-database ANSI parameter for today date)
+$today = date('Y-m-d');
 $stmt = $pdo->prepare("
     SELECT * FROM forms 
     WHERE status = 'active' 
-    ORDER BY CASE WHEN last_date IS NOT NULL AND last_date >= date('now') THEN 0 ELSE 1 END, last_date ASC, id DESC
+    ORDER BY CASE WHEN last_date IS NOT NULL AND last_date >= :today THEN 0 ELSE 1 END, last_date ASC, id DESC
 ");
-$stmt->execute();
+$stmt->execute([':today' => $today]);
 $forms = $stmt->fetchAll();
 
 // Extract unique categories for filter tabs
@@ -555,6 +556,9 @@ $rateColorDouble = (float)($settings['rate_color_double'] ?? 18.00);
 
                 <!-- Action Buttons -->
                 <div class="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-200">
+                    <a id="modalAttachmentLink" href="#" target="_blank" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-sm transition hidden">
+                        <i data-lucide="download" class="w-4 h-4"></i> Official Notification / Form
+                    </a>
                     <a id="modalOfficialLink" href="#" target="_blank" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 text-sm transition">
                         <i data-lucide="external-link" class="w-4 h-4"></i> Official Portal
                     </a>
@@ -712,6 +716,14 @@ $rateColorDouble = (float)($settings['rate_color_double'] ?? 18.00);
                 linkBtn.classList.remove('hidden');
             } else {
                 linkBtn.classList.add('hidden');
+            }
+
+            const attBtn = document.getElementById('modalAttachmentLink');
+            if (form.attachment_file) {
+                attBtn.href = 'uploads/forms/' + encodeURIComponent(form.attachment_file);
+                attBtn.classList.remove('hidden');
+            } else {
+                attBtn.classList.add('hidden');
             }
 
             document.getElementById('formModal').classList.remove('hidden');
@@ -880,6 +892,12 @@ $rateColorDouble = (float)($settings['rate_color_double'] ?? 18.00);
             document.getElementById('printSuccessModal').classList.add('hidden');
         }
 
+        function escapeHtml(str) {
+            return String(str || '').replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
         // Track Order
         async function handleTrackOrder(e) {
             e.preventDefault();
@@ -907,18 +925,24 @@ $rateColorDouble = (float)($settings['rate_color_double'] ?? 18.00);
                         if (o.status === 'Ready') statusColor = 'bg-emerald-100 text-emerald-800 border-emerald-200';
                         if (o.status === 'Delivered') statusColor = 'bg-blue-100 text-blue-800 border-blue-200';
 
+                        const safeName = escapeHtml(o.customer_name);
+                        const safeToken = escapeHtml(o.token_id);
+                        const safeType = escapeHtml(o.print_type);
+                        const safeSides = escapeHtml(o.sides);
+                        const safeStatus = escapeHtml(o.status);
+
                         html += `
                             <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold text-slate-500">${o.created_at}</span>
-                                    <span class="px-2.5 py-1 rounded-full text-xs font-bold border ${statusColor}">${o.status}</span>
+                                    <span class="text-xs font-bold text-slate-500">${escapeHtml(o.created_at)}</span>
+                                    <span class="px-2.5 py-1 rounded-full text-xs font-bold border ${statusColor}">${safeStatus}</span>
                                 </div>
                                 <div class="flex items-baseline justify-between">
-                                    <h4 class="font-bold text-slate-900 text-base">${o.token_id}</h4>
-                                    <span class="text-sm font-semibold text-slate-700">${o.estimated_amount}</span>
+                                    <h4 class="font-bold text-slate-900 text-base">${safeToken}</h4>
+                                    <span class="text-sm font-semibold text-slate-700">${escapeHtml(o.estimated_amount)}</span>
                                 </div>
                                 <p class="text-xs text-slate-600">
-                                    Customer: <strong>${o.customer_name}</strong> • ${o.print_type} (${o.sides}) • ${o.file_count} File(s) • ${o.copies} Copy
+                                    Customer: <strong>${safeName}</strong> • ${safeType} (${safeSides}) • ${o.file_count} File(s) • ${o.copies} Copy
                                 </p>
                             </div>
                         `;

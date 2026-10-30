@@ -91,8 +91,15 @@ function sendPrintOrderEmail($order, $files, $pdo = null) {
         $fromEmail = "noreply@" . preg_replace('/^www\./', '', $serverHost);
     }
 
-    $headers  = "From: {$centerName} <{$fromEmail}>\r\n";
-    $headers .= "Reply-To: " . (!empty($order['customer_email']) ? $order['customer_email'] : $fromEmail) . "\r\n";
+    // Sanitize headers to prevent email header injection
+    $safeCenterName = str_replace(["\r", "\n"], '', $centerName);
+    $cleanReplyTo = (!empty($order['customer_email']) && filter_var($order['customer_email'], FILTER_VALIDATE_EMAIL))
+        ? $order['customer_email'] 
+        : $fromEmail;
+    $cleanReplyTo = str_replace(["\r", "\n"], '', $cleanReplyTo);
+
+    $headers  = "From: {$safeCenterName} <{$fromEmail}>\r\n";
+    $headers .= "Reply-To: {$cleanReplyTo}\r\n";
     $headers .= "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: multipart/mixed; boundary=\"{$boundary}\"\r\n";
 
@@ -161,42 +168,76 @@ function sendViaSmtpSocket($to, $subject, $body, $headers, $pdo) {
         return false;
     }
 
-    $read = fgets($socket, 515);
+    $readSmtp = function($sock) {
+        $response = '';
+        while ($line = fgets($sock, 515)) {
+            $response .= $line;
+            // In RFC 5321, multi-line replies have a hyphen at index 3 (e.g. "250-").
+            // The final reply line has a space at index 3 (e.g. "250 ").
+            if (isset($line[3]) && $line[3] === ' ') {
+                break;
+            }
+        }
+        return $response;
+    };
 
-    fputs($socket, "EHLO " . ($_SERVER['SERVER_NAME'] ?? 'localhost') . "\r\n");
-    $read = fgets($socket, 515);
+    $greeting = $readSmtp($socket);
+    if (substr($greeting, 0, 3) !== '220') {
+        fclose($socket);
+        return false;
+    }
+
+    $serverName = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'localhost';
+    fputs($socket, "EHLO " . $serverName . "\r\n");
+    $ehlo = $readSmtp($socket);
 
     if ($secure === 'tls') {
         fputs($socket, "STARTTLS\r\n");
-        $read = fgets($socket, 515);
-        stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-        fputs($socket, "EHLO " . ($_SERVER['SERVER_NAME'] ?? 'localhost') . "\r\n");
-        $read = fgets($socket, 515);
+        $tlsResp = $readSmtp($socket);
+        if (substr($tlsResp, 0, 3) === '220') {
+            stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+            fputs($socket, "EHLO " . $serverName . "\r\n");
+            $ehlo = $readSmtp($socket);
+        }
     }
 
     fputs($socket, "AUTH LOGIN\r\n");
-    $read = fgets($socket, 515);
+    $readSmtp($socket);
 
     fputs($socket, base64_encode($user) . "\r\n");
-    $read = fgets($socket, 515);
+    $readSmtp($socket);
 
     fputs($socket, base64_encode($pass) . "\r\n");
-    $read = fgets($socket, 515);
+    $authResp = $readSmtp($socket);
+    if (substr($authResp, 0, 3) !== '235') {
+        fputs($socket, "QUIT\r\n");
+        fclose($socket);
+        return false;
+    }
 
     fputs($socket, "MAIL FROM: <$user>\r\n");
-    $read = fgets($socket, 515);
+    $readSmtp($socket);
 
     fputs($socket, "RCPT TO: <$to>\r\n");
-    $read = fgets($socket, 515);
+    $readSmtp($socket);
 
     fputs($socket, "DATA\r\n");
-    $read = fgets($socket, 515);
+    $dataResp = $readSmtp($socket);
+    if (substr($dataResp, 0, 3) !== '354') {
+        fputs($socket, "QUIT\r\n");
+        fclose($socket);
+        return false;
+    }
 
-    fputs($socket, "Subject: $subject\r\n" . $headers . "\r\n" . $body . "\r\n.\r\n");
-    $read = fgets($socket, 515);
+    // Dot-stuffing according to RFC 5321 section 4.5.2
+    $safeBody = preg_replace('/^\./m', '..', $body);
+    $safeSubject = str_replace(["\r", "\n"], '', $subject);
+
+    fputs($socket, "Subject: {$safeSubject}\r\n" . $headers . "\r\n" . $safeBody . "\r\n.\r\n");
+    $sendResp = $readSmtp($socket);
 
     fputs($socket, "QUIT\r\n");
     fclose($socket);
 
-    return (strpos($read, '250') !== false);
+    return (substr($sendResp, 0, 3) === '250');
 }
