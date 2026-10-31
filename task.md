@@ -147,6 +147,20 @@ This document serves as the master persistence and connection point between AI s
   - *Action*: Document filenames uploaded by citizens are randomized with timestamp and cryptographic random hex (`doc_YYYYMMDD_HHMMSS_<8hex>.<ext>`) in `print_orders.files_json`, preventing directory indexing, IDOR, or enumeration attacks.
   - *Status*: ✅ Completed.
 
+### 8. Midnight Session Auto-Logout & 30-Minute Dynamic Postponement Window
+- [x] **8.1 Elimination of Daytime 30-Minute Inactivity Timeout**
+  - *Action*: Removed the daytime 30-minute idle session termination in `includes/auth.php`. Operators now remain authenticated all day long without needing to re-login multiple times.
+  - *Status*: ✅ Completed.
+- [x] **8.2 Timezone & Server Session Lifetime Configuration**
+  - *Action*: Configured `date_default_timezone_set('Asia/Kolkata')` and set `ini_set('session.gc_maxlifetime', 172800)` (48 hours) in `includes/config.php` to prevent premature server-side garbage collection of active sessions during working hours.
+  - *Status*: ✅ Completed.
+- [x] **8.3 Midnight Rollover Check with 30-Minute Rolling Postponement**
+  - *Action*: Implemented calendar day comparison (`date('Y-m-d') !== $_SESSION['login_date']`) in `requireOwnerLogin()`. If the owner is actively interacting with the website around midnight (activity within the last 30 minutes), the auto-logout is dynamically postponed by 30 minutes on each interaction.
+  - *Status*: ✅ Completed.
+- [x] **8.4 Inactivity Detection and Graceful Redirect**
+  - *Action*: If the owner stops interacting for >30 minutes past midnight (or opens the tab the next morning), the session terminates and redirects to `login.php?reason=midnight`. Added an informative alert banner in `owner/login.php` welcoming the operator to sign in for the new day.
+  - *Status*: ✅ Completed.
+
 ---
 
 ## 📈 Automated Verification Suite Results

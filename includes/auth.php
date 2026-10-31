@@ -17,14 +17,28 @@ function requireOwnerLogin() {
         exit;
     }
 
-    // 30-minute idle session timeout
-    $idleTimeout = 1800;
-    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $idleTimeout)) {
-        ownerLogout();
-        header('Location: login.php?timeout=1');
-        exit;
+    $now = time();
+    $today = date('Y-m-d');
+    $loginDate = $_SESSION['login_date'] ?? $today;
+    $lastActivity = $_SESSION['last_activity'] ?? $now;
+    $midnightPostponeWindow = 1800; // 30 minutes postponement window at midnight
+
+    // Auto-logout evaluation exclusively at Midnight (calendar day rollover)
+    if ($today !== $loginDate) {
+        // If owner was inactive for more than 30 minutes past midnight -> Auto Logout
+        if (($now - $lastActivity) > $midnightPostponeWindow) {
+            ownerLogout();
+            header('Location: login.php?reason=midnight');
+            exit;
+        }
+
+        // Owner is actively using the portal at midnight -> Postpone by 30 minutes each time
+        $_SESSION['last_activity'] = $now;
+        return;
     }
-    $_SESSION['last_activity'] = time();
+
+    // Daytime: No auto-logout during the same calendar day
+    $_SESSION['last_activity'] = $now;
 }
 
 function ownerLogin($username, $password, $pdo = null) {
@@ -39,6 +53,7 @@ function ownerLogin($username, $password, $pdo = null) {
         if (!empty($adminHash) && password_verify($password, $adminHash)) {
             $_SESSION['owner_logged_in'] = true;
             $_SESSION['owner_username'] = $username;
+            $_SESSION['login_date'] = date('Y-m-d');
             $_SESSION['last_activity'] = time();
             return true;
         }
@@ -47,6 +62,7 @@ function ownerLogin($username, $password, $pdo = null) {
         if (empty($adminHash) && $password === DEFAULT_ADMIN_PASS) {
             $_SESSION['owner_logged_in'] = true;
             $_SESSION['owner_username'] = $username;
+            $_SESSION['login_date'] = date('Y-m-d');
             $_SESSION['last_activity'] = time();
             updateSetting('admin_password', password_hash($password, PASSWORD_DEFAULT), $pdo);
             return true;
@@ -59,6 +75,7 @@ function ownerLogin($username, $password, $pdo = null) {
 function ownerLogout() {
     unset($_SESSION['owner_logged_in']);
     unset($_SESSION['owner_username']);
+    unset($_SESSION['login_date']);
     unset($_SESSION['last_activity']);
     session_destroy();
 }

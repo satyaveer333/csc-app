@@ -84,6 +84,18 @@ $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
             <p class="text-slate-500 dark:text-slate-400 text-sm mt-1"><?= e($centerName) ?></p>
         </div>
 
+        <?php if (isset($_GET['reason']) && $_GET['reason'] === 'midnight'): ?>
+            <div class="mb-6 p-4 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-xs sm:text-sm flex items-center gap-2 shadow-sm">
+                <i data-lucide="clock" class="w-5 h-5 shrink-0 text-blue-600 dark:text-blue-400"></i>
+                <span>Your daily session concluded at midnight. Please sign in to begin today's session.</span>
+            </div>
+        <?php elseif (isset($_GET['timeout']) && $_GET['timeout'] == 1): ?>
+            <div class="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs sm:text-sm flex items-center gap-2 shadow-sm">
+                <i data-lucide="clock" class="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400"></i>
+                <span>Session timed out. Please sign in to continue.</span>
+            </div>
+        <?php endif; ?>
+
         <?php if (!empty($error)): ?>
             <div class="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 dark:bg-red-950/60 dark:border-red-800/80 dark:text-red-300 text-sm flex items-center gap-2">
                 <i data-lucide="alert-circle" class="w-5 h-5 shrink-0 text-red-500"></i>
@@ -122,7 +134,7 @@ $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
                 <i data-lucide="shield-alert" class="w-4 h-4 text-blue-500"></i>
                 <span>Secure Center Administration</span>
             </div>
-            <p>Access is restricted to authorized CSC operators. All login activities are monitored and sessions expire after 30 minutes of inactivity.</p>
+            <p>Access is restricted to authorized CSC operators. Daytime sessions remain active for uninterrupted work; sessions automatically conclude at midnight for security.</p>
         </div>
     </div>
 

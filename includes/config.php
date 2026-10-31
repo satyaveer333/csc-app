@@ -8,10 +8,14 @@ if (!defined('CSC_APP')) {
     define('CSC_APP', true);
 }
 
-// Session configuration
+// Timezone for accurate midnight (12:00 AM) auto-logout detection
+date_default_timezone_set('Asia/Kolkata');
+
+// Session configuration - keep server session storage active across the day
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_only_cookies', 1);
+    ini_set('session.gc_maxlifetime', 172800); // 48 hours server session retention
     session_start();
 }
 
