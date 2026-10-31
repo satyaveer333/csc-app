@@ -42,10 +42,13 @@ function getDbConnection() {
     } catch (PDOException $e) {
         error_log('Database Connection Error: ' . $e->getMessage());
         $msg = htmlspecialchars($e->getMessage());
+        $hint = (DB_DRIVER === 'mysql')
+            ? "Using MySQL driver. Please verify that MySQL is running, the database <code>" . htmlspecialchars(DB_NAME) . "</code> exists, and credentials in <code>includes/config.php</code> are correct. You can also import <code>schema.sql</code> via phpMyAdmin or MySQL CLI."
+            : "If running in Docker on Linux, ensure the <code>data/</code> folder has write permissions (run: <code>chmod -R 777 data uploads</code>).";
         die("<div style='font-family:system-ui,sans-serif;max-width:620px;margin:50px auto;padding:24px;border:1px solid #f87171;border-radius:16px;background:#fef2f2;color:#991b1b;box-shadow:0 4px 12px rgba(0,0,0,0.05);'>
             <h3 style='margin:0 0 10px 0;font-size:18px;'>Database Connection Error</h3>
             <p style='margin:0 0 12px 0;font-size:14px;'><strong>Details:</strong> {$msg}</p>
-            <p style='font-size:13px;color:#7f1d1d;margin:0;'>If running in Docker on Linux, ensure the <code>data/</code> folder has write permissions (run: <code>chmod -R 777 data uploads</code>).</p>
+            <p style='font-size:13px;color:#7f1d1d;margin:0;'>{$hint}</p>
         </div>");
     }
 }
@@ -53,6 +56,7 @@ function getDbConnection() {
 function initDatabaseTables($pdo) {
     $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
     $autoInc = ($driver === 'sqlite') ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT AUTO_INCREMENT PRIMARY KEY';
+    $tableOptions = ($driver === 'sqlite') ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     // 1. Settings Table
     $pdo->exec("
@@ -60,7 +64,7 @@ function initDatabaseTables($pdo) {
             setting_key VARCHAR(100) PRIMARY KEY,
             setting_value TEXT,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
+        )$tableOptions;
     ");
 
     // 2. Forms Table
@@ -81,7 +85,7 @@ function initDatabaseTables($pdo) {
             status VARCHAR(20) DEFAULT 'active',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
+        )$tableOptions;
     ");
 
     // 3. Inventory Table
@@ -97,7 +101,7 @@ function initDatabaseTables($pdo) {
             selling_price DECIMAL(10,2) DEFAULT 0.00,
             notes TEXT,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
+        )$tableOptions;
     ");
 
     // 4. Print Orders Table
@@ -118,7 +122,7 @@ function initDatabaseTables($pdo) {
             status VARCHAR(30) DEFAULT 'pending',
             email_sent INT DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
+        )$tableOptions;
     ");
 
     // Seed default settings if empty

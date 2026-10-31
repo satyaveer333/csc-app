@@ -79,6 +79,23 @@ This document serves as the master persistence and connection point between AI s
   - *Fix*: Updated to `py-0.5`.
   - *Status*: ✅ Verified.
 
+### 4. Database Migration & Production Server Readiness (MySQL)
+- [x] **4.1 Git Ignore & Untrack SQLite Database File**
+  - *Action*: Configured `.gitignore` to ignore `csc_database.sqlite`, `data/csc_database.sqlite`, `*.sqlite`, `*.db`, and citizen upload directories (`uploads/prints/*`). Removed `data/csc_database.sqlite` from the Git tracking index via `git rm --cached` while preserving the local physical file.
+  - *Status*: ✅ Completed.
+- [x] **4.2 Provide Production-Ready MySQL Schema with Seed Data (`schema.sql`)**
+  - *Action*: Exported complete MySQL schema (`schema.sql`) with `InnoDB` engine, `utf8mb4` character set, auto-increment primary keys, performance indexes (`status`, `category`, `phone`, `token_id`), and all 4 tables (`settings`, `forms`, `inventory`, `print_orders`) prepopulated with initial data and bcrypt password hash.
+  - *Status*: ✅ Completed.
+- [x] **4.3 Dynamic MySQL / SQLite Configuration (`includes/config.php`)**
+  - *Action*: Enhanced database configuration to support both environment variable injection (`getenv('DB_DRIVER')`, `getenv('DB_HOST')`, etc.) and direct editing.
+  - *Status*: ✅ Completed.
+- [x] **4.4 Engine Options & Informative MySQL Connection Diagnostics (`includes/db.php`)**
+  - *Action*: Added `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci` table options for MySQL driver in `initDatabaseTables()`. Updated connection exception handler to display actionable troubleshooting diagnostics tailored to MySQL (credential check, database existence, schema import reminder).
+  - *Status*: ✅ Completed.
+- [x] **4.5 Server Migration Runbook for Deployed Commit (`ff91a30`)**
+  - *Action*: Documented exact server-side steps to pull latest code, resolve local SQLite untrack conflict, import `schema.sql` in phpMyAdmin/MySQL CLI, switch config to MySQL, and verify server PHP extensions (`pdo_mysql`).
+  - *Status*: ✅ Completed.
+
 ---
 
 ## 📈 Automated Verification Suite Results
@@ -102,5 +119,6 @@ This document serves as the master persistence and connection point between AI s
 
 ## 💡 Notes for Next AI Session
 1. **Container Bind Mount**: Docker container `csc-app-container` runs on port 8080 and mounts host directory `/home/satyaveer/Desktop/Projects/csc-app` to `/var/www/html`.
-2. **Database Engine**: Uses SQLite (`data/csc_database.sqlite`) by default, with auto-detection for MySQL queries if migrated.
+2. **Database Engine**: Dual-driver architecture supporting SQLite (`data/csc_database.sqlite`, ignored in git) and MySQL (`schema.sql` provided at root with InnoDB / utf8mb4). Toggle via `DB_DRIVER` in `includes/config.php` or `DB_DRIVER` environment variable.
 3. **Pristine State**: Test print records and temporary test uploads are cleaned up after test runs.
+4. **Git Index**: `data/csc_database.sqlite` is untracked from Git (`git rm --cached`) so local writes do not pollute Git commits. Server uses MySQL via `schema.sql`.

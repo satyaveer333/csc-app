@@ -29,20 +29,20 @@ define('FORMS_DIR', UPLOADS_DIR . '/forms');
 define('DATA_DIR', APP_ROOT . '/data');
 
 // Database Configuration
-// By default, uses SQLite so it works INSTANTLY with 0 setup on Serverbyt.
-// To use MySQL on Serverbyt Blaze, simply set DB_DRIVER to 'mysql' and fill credentials.
-define('DB_DRIVER', 'sqlite'); // 'sqlite' or 'mysql'
+// 'sqlite' (zero-setup local development) or 'mysql' (production server).
+// Can be toggled directly here or overridden via environment variables.
+define('DB_DRIVER', getenv('DB_DRIVER') ?: 'sqlite'); // 'sqlite' or 'mysql'
 
-// SQLite settings
-define('SQLITE_FILE', DATA_DIR . '/csc_database.sqlite');
+// SQLite settings (Used when DB_DRIVER === 'sqlite')
+define('SQLITE_FILE', getenv('SQLITE_FILE') ?: (DATA_DIR . '/csc_database.sqlite'));
 
-// MySQL settings (Optional - for when you create a MySQL database in Serverbyt StackCP)
-define('DB_HOST', 'localhost');
-define('DB_PORT', 3306);
-define('DB_NAME', 'csc_db');
-define('DB_USER', 'csc_user');
-define('DB_PASS', 'your_password');
-define('DB_CHARSET', 'utf8mb4');
+// MySQL settings (Used when DB_DRIVER === 'mysql')
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_PORT', (int)(getenv('DB_PORT') ?: 3306));
+define('DB_NAME', getenv('DB_NAME') ?: 'csc_db');
+define('DB_USER', getenv('DB_USER') ?: 'csc_user');
+define('DB_PASS', getenv('DB_PASS') !== false ? getenv('DB_PASS') : 'your_password');
+define('DB_CHARSET', getenv('DB_CHARSET') ?: 'utf8mb4');
 
 // Default App Settings (can be overridden in Admin Settings)
 define('DEFAULT_ADMIN_USER', 'admin');

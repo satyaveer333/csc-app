@@ -1,1 +1,28 @@
+# SQLite Database files
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.db
+csc_database.sqlite
 data/csc_database.sqlite
+data/*.sqlite
+data/*.sqlite3
+data/*.db
+
+# User Uploaded Documents (keep directories and htaccess protection)
+uploads/prints/*
+!uploads/prints/.gitkeep
+!uploads/prints/.htaccess
+uploads/forms/*
+!uploads/forms/.gitkeep
+
+# Environment / Sensitive local configs
+.env
+.env.*
+!*.example
+
+# OS and Editor metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
