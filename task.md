@@ -122,3 +122,4 @@ This document serves as the master persistence and connection point between AI s
 2. **Database Engine**: Dual-driver architecture supporting SQLite (`data/csc_database.sqlite`, ignored in git) and MySQL (`schema.sql` provided at root with InnoDB / utf8mb4). Toggle via `DB_DRIVER` in `includes/config.php` or `DB_DRIVER` environment variable.
 3. **Pristine State**: Test print records and temporary test uploads are cleaned up after test runs.
 4. **Git Index**: `data/csc_database.sqlite` is untracked from Git (`git rm --cached`) so local writes do not pollute Git commits. Server uses MySQL via `schema.sql`.
+5. **Strict Git Policy (User Mandate)**: The AI assistant must **NEVER** execute `git add`, `git commit`, `git push`, or `git pull`. All staging, committing, pushing, and pulling are strictly managed by the user. Do not revert commit `b0774de`.
