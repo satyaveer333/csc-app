@@ -70,41 +70,44 @@ $rateColorDouble = (float)($settings['rate_color_double'] ?? 18.00);
 
     <!-- Top Citizen Service Bar -->
     <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-20">
-                <div class="flex items-center space-x-3.5">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between min-h-[4.5rem] py-2 gap-2 sm:gap-4">
+                <div class="flex items-center space-x-2.5 sm:space-x-3.5 min-w-0">
                     <!-- Brand DS Monogram Logo -->
-                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-700 via-blue-600 to-sky-500 text-white flex items-center justify-center shadow-md shadow-blue-500/20 font-black text-xl tracking-tighter border border-blue-400/40 select-none">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-700 via-blue-600 to-sky-500 text-white flex items-center justify-center shadow-md shadow-blue-500/20 font-black text-lg sm:text-xl tracking-tighter border border-blue-400/40 select-none shrink-0">
                         DS
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         <div class="flex items-center space-x-2">
-                            <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-none">
+                            <h1 class="text-base sm:text-2xl font-black text-slate-900 tracking-tight leading-tight truncate">
                                 <?= e($settings['center_name'] ?? 'Digital Solutions') ?>
                             </h1>
                             <?php if (!empty($settings['vle_id'])): ?>
-                                <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">
+                                <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800 shrink-0">
                                     VLE: <?= e($settings['vle_id']) ?>
                                 </span>
                             <?php endif; ?>
                         </div>
-                        <p class="text-xs sm:text-sm text-slate-500 mt-1 flex items-center gap-2">
-                            <span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-400"></i> <?= e($settings['center_address'] ?? 'Customer Service Point') ?></span>
-                            <span class="hidden md:inline-flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400"></i> <?= e($settings['opening_hours'] ?? '9 AM - 8 PM') ?></span>
+                        <p class="text-[11px] sm:text-sm text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span class="flex items-center gap-1 truncate"><i data-lucide="map-pin" class="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0"></i> <?= e($settings['center_address'] ?? 'Customer Service Point') ?></span>
+                            <span class="hidden md:inline-flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i> <?= e($settings['opening_hours'] ?? '9 AM - 8 PM') ?></span>
                         </p>
                     </div>
                 </div>
 
                 <!-- Contact & WhatsApp button -->
-                <div class="flex items-center space-x-2 sm:space-x-4">
-                    <?php if (!empty($settings['owner_phone'])): ?>
-                        <a href="tel:<?= e($settings['owner_phone']) ?>" class="hidden sm:inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+                <div class="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
+                    <?php if (!empty($settings['owner_phone'])): 
+                        $rawOwnerDigits = preg_replace('/[^0-9]/', '', $settings['owner_phone']);
+                        $waDigits = (strlen($rawOwnerDigits) === 10) ? '91' . $rawOwnerDigits : $rawOwnerDigits;
+                    ?>
+                        <a href="tel:<?= e($settings['owner_phone']) ?>" class="hidden lg:inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-xl text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
                             <i data-lucide="phone" class="w-4 h-4 text-blue-600"></i>
-                            <span><?= e($settings['owner_phone']) ?></span>
+                            <span class="font-mono"><?= e($settings['owner_phone']) ?></span>
                         </a>
-                        <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $settings['owner_phone']) ?>?text=Hello%20CSC%20Center,%20I%20need%20assistance" target="_blank" class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition">
+                        <a href="https://wa.me/<?= $waDigits ?>?text=Hello%20CSC%20Center,%20I%20need%20assistance" target="_blank" class="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition">
                             <i data-lucide="message-circle" class="w-4 h-4"></i>
-                            <span class="hidden sm:inline">WhatsApp</span>
+                            <span>WhatsApp</span>
                         </a>
                     <?php endif; ?>
                 </div>
@@ -300,12 +303,15 @@ $rateColorDouble = (float)($settings['rate_color_double'] ?? 18.00);
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                                        Mobile / WhatsApp Number <span class="text-red-500">*</span>
+                                        Mobile / WhatsApp Number <span class="text-blue-600 font-normal">(10 Digits Only)</span> <span class="text-red-500">*</span>
                                     </label>
                                     <div class="relative">
                                         <i data-lucide="phone" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5"></i>
-                                        <input type="tel" name="customer_phone" required placeholder="e.g. 9876543210"
-                                               class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+                                        <input type="tel" name="customer_phone" required
+                                               maxlength="10" minlength="10" pattern="[0-9]{10}"
+                                               placeholder="10-digit mobile number e.g. 9876543210"
+                                               oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10)"
+                                               class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition font-mono">
                                     </div>
                                 </div>
                                 <div class="sm:col-span-2">
@@ -497,19 +503,19 @@ $rateColorDouble = (float)($settings['rate_color_double'] ?? 18.00);
     </footer>
 
     <!-- ================= FORM DETAILS MODAL ================= -->
-    <div id="formModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200">
-            <div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10">
-                <div>
+    <div id="formModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-2xl w-[96%] sm:w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200">
+            <div class="sticky top-0 bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center justify-between z-10">
+                <div class="pr-2">
                     <span id="modalCategory" class="px-2.5 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800">Category</span>
-                    <h3 id="modalTitle" class="text-xl font-bold text-slate-900 mt-1">Form Title</h3>
+                    <h3 id="modalTitle" class="text-lg sm:text-xl font-bold text-slate-900 mt-1">Form Title</h3>
                 </div>
-                <button onclick="closeFormModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition">
+                <button onclick="closeFormModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition shrink-0">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
 
-            <div class="p-6 space-y-6">
+            <div class="p-4 sm:p-6 space-y-6">
                 <!-- Department & Important Dates -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-sm">
                     <div>
@@ -571,8 +577,8 @@ $rateColorDouble = (float)($settings['rate_color_double'] ?? 18.00);
     </div>
 
     <!-- ================= PRINT SUCCESS RECEIPT MODAL ================= -->
-    <div id="printSuccessModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 text-center">
+    <div id="printSuccessModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-lg w-[96%] sm:w-full p-5 sm:p-8 shadow-2xl border border-slate-200 text-center max-h-[92vh] overflow-y-auto">
             <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4">
                 <i data-lucide="check-circle-2" class="w-9 h-9"></i>
             </div>

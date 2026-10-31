@@ -10,10 +10,13 @@ require_once dirname(__DIR__) . '/includes/helpers.php';
 
 header('Content-Type: application/json');
 
-$query = trim($_GET['q'] ?? '');
+$query = trim(strip_tags($_GET['q'] ?? ''));
 if (empty($query)) {
     echo json_encode(['success' => false, 'message' => 'Please provide a Token ID or Mobile Number.']);
     exit;
+}
+if (mb_strlen($query) > 50) {
+    $query = mb_substr($query, 0, 50);
 }
 
 $pdo = getDbConnection();

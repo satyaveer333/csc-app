@@ -22,18 +22,34 @@ $pdo = getDbConnection();
 
 // Validate and sanitize Customer Inputs
 $customerName = trim(strip_tags($_POST['customer_name'] ?? ''));
-$customerPhone = trim(strip_tags($_POST['customer_phone'] ?? ''));
+$rawPhone = trim($_POST['customer_phone'] ?? '');
 $customerEmail = trim(strip_tags($_POST['customer_email'] ?? ''));
 $printType = in_array($_POST['print_type'] ?? '', ['B&W', 'Color']) ? $_POST['print_type'] : 'B&W';
 $sides = in_array($_POST['sides'] ?? '', ['Single Sided', 'Both Sided (Duplex)']) ? $_POST['sides'] : 'Single Sided';
 $paperSize = in_array($_POST['paper_size'] ?? '', ['A4', 'Legal', 'Glossy Photo Paper', 'A3']) ? $_POST['paper_size'] : 'A4';
 $copies = max(1, min(100, intval($_POST['copies'] ?? 1)));
 $notes = trim(strip_tags($_POST['notes'] ?? ''));
+if (mb_strlen($notes) > 1000) {
+    $notes = mb_substr($notes, 0, 1000);
+}
 
-if (empty($customerName) || empty($customerPhone)) {
+if (empty($customerName) || empty($rawPhone)) {
     echo json_encode(['success' => false, 'message' => 'Please provide your Full Name and Mobile Number.']);
     exit;
 }
+
+if (mb_strlen($customerName) < 2 || mb_strlen($customerName) > 100) {
+    echo json_encode(['success' => false, 'message' => 'Customer name must be between 2 and 100 characters.']);
+    exit;
+}
+
+// Strict 10-digit mobile number check
+$cleanPhone = preg_replace('/[^0-9]/', '', $rawPhone);
+if (strlen($cleanPhone) !== 10) {
+    echo json_encode(['success' => false, 'message' => 'Mobile number must be exactly 10 digits (e.g. 9876543210).']);
+    exit;
+}
+$customerPhone = $cleanPhone;
 
 if (!empty($customerEmail) && !filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
     echo json_encode(['success' => false, 'message' => 'Please provide a valid email address or leave it blank.']);

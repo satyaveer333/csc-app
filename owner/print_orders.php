@@ -1,7 +1,6 @@
 <?php
 /**
  * CSC Owner Portal - Customer Print Orders Hub
- * Manage incoming print orders, download documents, change status, and send WhatsApp alerts
  */
 
 define('CSC_APP', true);
@@ -16,7 +15,7 @@ $pdo = getDbConnection();
 
 $action = $_POST['action'] ?? '';
 
-// Handle POST actions
+// Handle actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Verify CSRF Token
@@ -44,7 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Delete order
     if ($action === 'delete_order') {
         $orderId = (int)$_POST['order_id'];
-        // Fetch files to delete from disk
         $stmt = $pdo->prepare("SELECT files_json FROM print_orders WHERE id = :id");
         $stmt->execute([':id' => $orderId]);
         $row = $stmt->fetch();
@@ -64,9 +62,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Filter by status tab & order ID
+// Filter by Status and Search Query
 $selectedStatus = $_GET['status'] ?? 'all';
-$searchQuery = trim($_GET['q'] ?? '');
+$searchQuery = trim(strip_tags($_GET['q'] ?? ''));
+if (mb_strlen($searchQuery) > 50) $searchQuery = mb_substr($searchQuery, 0, 50);
+
 $filterOrderId = (int)($_GET['order'] ?? 0);
 
 $sql = "SELECT * FROM print_orders";
@@ -117,25 +117,37 @@ $flash = getFlash();
     <!-- Favicon (DS Monogram) -->
     <link rel="icon" type="image/svg+xml" href="../favicon.svg">
     <link rel="alternate icon" href="../favicon.svg">
+    <script>
+        if (localStorage.getItem('owner_theme') === 'light') {
+            document.documentElement.classList.remove('dark');
+        } else {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        };
+    </script>
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="min-h-screen bg-slate-900 text-slate-100 flex flex-col antialiased">
+<body class="min-h-screen bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-100 flex flex-col antialiased transition-colors duration-150">
 
     <?php include __DIR__ . '/nav.php'; ?>
 
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
         
         <!-- Header -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
             <div>
-                <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Customer Document Print Requests</h1>
-                <p class="text-slate-400 text-sm mt-1">Download citizen uploaded documents, manage print status, and notify customers.</p>
+                <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Customer Document Print Requests</h1>
+                <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">Download citizen uploaded documents, update processing status, and notify via WhatsApp.</p>
             </div>
         </div>
 
         <?php if ($flash): ?>
-            <div class="p-4 rounded-xl <?= $flash['type'] === 'success' ? 'bg-emerald-950/70 border border-emerald-800 text-emerald-300' : 'bg-red-950/70 border border-red-800 text-red-300' ?> text-sm flex items-center gap-2">
+            <div class="p-4 rounded-xl <?= $flash['type'] === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/70 dark:border-emerald-800 dark:text-emerald-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-950/70 dark:border-red-800 dark:text-red-300' ?> text-xs sm:text-sm flex items-center gap-2 shadow-sm">
                 <i data-lucide="<?= $flash['type'] === 'success' ? 'check-circle' : 'alert-circle' ?>" class="w-5 h-5 shrink-0"></i>
                 <span><?= e($flash['message']) ?></span>
             </div>
@@ -143,31 +155,31 @@ $flash = getFlash();
 
         <!-- Filter Tabs & Search -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-bold">
-                <a href="print_orders.php" class="px-3.5 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700' ?>">
-                    All Orders (<?= $counts['all'] ?>)
+            <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-bold no-scrollbar">
+                <a href="print_orders.php" class="px-3 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'all' ? 'bg-blue-600 text-white font-black' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700' ?>">
+                    All (<?= $counts['all'] ?>)
                 </a>
-                <a href="print_orders.php?status=pending" class="px-3.5 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'pending' ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-amber-400 hover:bg-slate-700' ?>">
+                <a href="print_orders.php?status=pending" class="px-3 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'pending' ? 'bg-amber-500 text-slate-900 font-black' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-amber-600 dark:text-amber-400 hover:bg-slate-50 dark:hover:bg-slate-700' ?>">
                     Pending (<?= $counts['pending'] ?>)
                 </a>
-                <a href="print_orders.php?status=processing" class="px-3.5 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'processing' ? 'bg-blue-500 text-white' : 'bg-slate-800 text-blue-400 hover:bg-slate-700' ?>">
+                <a href="print_orders.php?status=processing" class="px-3 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'processing' ? 'bg-blue-500 text-white font-black' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700' ?>">
                     Printing (<?= $counts['processing'] ?>)
                 </a>
-                <a href="print_orders.php?status=ready" class="px-3.5 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'ready' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-emerald-400 hover:bg-slate-700' ?>">
-                    Ready for Pickup (<?= $counts['ready'] ?>)
+                <a href="print_orders.php?status=ready" class="px-3 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'ready' ? 'bg-emerald-600 text-white font-black' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400 hover:bg-slate-50 dark:hover:bg-slate-700' ?>">
+                    Ready (<?= $counts['ready'] ?>)
                 </a>
-                <a href="print_orders.php?status=delivered" class="px-3.5 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'delivered' ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700' ?>">
+                <a href="print_orders.php?status=delivered" class="px-3 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'delivered' ? 'bg-slate-600 text-white font-black' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700' ?>">
                     Delivered (<?= $counts['delivered'] ?>)
                 </a>
-                <a href="print_orders.php?status=cancelled" class="px-3.5 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'cancelled' ? 'bg-red-950/80 border border-red-800 text-red-300' : 'bg-slate-800 text-slate-400 hover:bg-slate-700' ?>">
+                <a href="print_orders.php?status=cancelled" class="px-3 py-2 rounded-xl transition whitespace-nowrap <?= $selectedStatus === 'cancelled' ? 'bg-red-600 text-white font-black' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-700' ?>">
                     Cancelled (<?= $counts['cancelled'] ?>)
                 </a>
             </div>
 
             <form method="GET" class="relative w-full md:w-80">
                 <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
-                <input type="text" name="q" value="<?= e($searchQuery) ?>" placeholder="Search Token ID, Name, Phone..."
-                       class="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="text" name="q" value="<?= e($searchQuery) ?>" placeholder="Search Token, Name, Phone..."
+                       class="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <?php if ($selectedStatus !== 'all'): ?>
                     <input type="hidden" name="status" value="<?= e($selectedStatus) ?>">
                 <?php endif; ?>
@@ -175,17 +187,17 @@ $flash = getFlash();
         </div>
 
         <?php if ($filterOrderId > 0): ?>
-            <div class="p-3 bg-blue-950/70 border border-blue-800 rounded-xl text-xs text-blue-200 flex items-center justify-between">
+            <div class="p-3 bg-blue-50 dark:bg-blue-950/70 border border-blue-200 dark:border-blue-800 rounded-xl text-xs text-blue-800 dark:text-blue-200 flex items-center justify-between">
                 <span>Filtering by single order ID: <strong>#<?= $filterOrderId ?></strong></span>
-                <a href="print_orders.php" class="font-bold underline hover:text-white">View All Orders</a>
+                <a href="print_orders.php" class="font-bold underline hover:text-blue-600 dark:hover:text-white">View All Orders</a>
             </div>
         <?php endif; ?>
 
         <!-- Orders Grid / Cards -->
         <?php if (empty($orders)): ?>
-            <div class="bg-slate-800 rounded-2xl p-12 text-center border border-slate-700 shadow-md">
-                <i data-lucide="inbox" class="w-12 h-12 text-slate-500 mx-auto mb-3"></i>
-                <h3 class="text-base font-bold text-slate-300">No Orders Found</h3>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center border border-slate-200 dark:border-slate-700 shadow-sm">
+                <i data-lucide="inbox" class="w-12 h-12 text-slate-400 dark:text-slate-500 mx-auto mb-3"></i>
+                <h3 class="text-base font-bold text-slate-700 dark:text-slate-300">No Orders Found</h3>
                 <p class="text-xs text-slate-500 mt-1">There are no orders matching this filter or search query.</p>
             </div>
         <?php else: ?>
@@ -196,36 +208,36 @@ $flash = getFlash();
                     $rawPhone = preg_replace('/[^0-9]/', '', $order['customer_phone']);
                     $cleanPhone = (strlen($rawPhone) === 10) ? '91' . $rawPhone : $rawPhone;
                     
-                    $waText = urlencode("Namaste " . $order['customer_name'] . "! Your document print order (" . $order['token_id'] . ") is PRINTED and READY for pickup at " . $centerName . ". Please visit to collect your prints.");
+                    $waText = urlencode("Namaste " . $order['customer_name'] . "! Your document print order (" . $order['token_id'] . ") is PRINTED and READY for pickup at " . $centerName . ". Please visit our center to collect your prints.");
                 ?>
-                    <div class="bg-slate-800 rounded-2xl border border-slate-700 p-5 sm:p-6 shadow-md hover:border-slate-600 transition space-y-4">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 shadow-sm hover:border-slate-300 dark:hover:border-slate-600 transition space-y-4">
                         
                         <!-- Top Order Bar -->
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700/60 pb-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700/60 pb-4">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold">
+                                <div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
                                     <i data-lucide="printer" class="w-5 h-5"></i>
                                 </div>
                                 <div>
                                     <div class="flex items-center gap-2">
-                                        <h3 class="font-extrabold text-white text-lg tracking-wide"><?= e($order['token_id']) ?></h3>
+                                        <h3 class="font-extrabold text-slate-900 dark:text-white text-base sm:text-lg tracking-wide"><?= e($order['token_id']) ?></h3>
                                         <?php if ($order['email_sent']): ?>
-                                            <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded-full" title="Owner email notified">
-                                                <i data-lucide="mail-check" class="w-3 h-3"></i> Email Dispatched
+                                            <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded-full" title="Owner email notified">
+                                                <i data-lucide="mail-check" class="w-3 h-3"></i> Email Sent
                                             </span>
                                         <?php endif; ?>
                                     </div>
-                                    <p class="text-xs text-slate-400 mt-0.5">Submitted on <?= date('d M Y, h:i A', strtotime($order['created_at'])) ?></p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Submitted on <?= date('d M Y, h:i A', strtotime($order['created_at'])) ?></p>
                                 </div>
                             </div>
 
                             <!-- Status Dropdown / Action -->
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                                 <form method="POST" class="flex items-center gap-2">
                                     <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                     <input type="hidden" name="action" value="update_status">
                                     <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
-                                    <select name="status" onchange="this.form.submit()" class="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-white focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                                    <select name="status" onchange="this.form.submit()" class="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 cursor-pointer">
                                         <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>⏳ Pending</option>
                                         <option value="processing" <?= $status === 'processing' ? 'selected' : '' ?>>🖨️ Printing</option>
                                         <option value="ready" <?= $status === 'ready' ? 'selected' : '' ?>>✅ Ready for Pickup</option>
@@ -245,7 +257,7 @@ $flash = getFlash();
                                     <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                                     <input type="hidden" name="action" value="delete_order">
                                     <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
-                                    <button type="submit" class="p-1.5 rounded-xl bg-slate-700 hover:bg-red-800 text-slate-400 hover:text-white transition" title="Delete Order">
+                                    <button type="submit" class="p-1.5 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 dark:bg-slate-700 dark:hover:bg-red-900/40 dark:text-slate-400 dark:hover:text-red-300 transition" title="Delete Order">
                                         <i data-lucide="trash-2" class="w-4 h-4"></i>
                                     </button>
                                 </form>
@@ -253,61 +265,58 @@ $flash = getFlash();
                         </div>
 
                         <!-- Customer & Print Details -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs bg-slate-900/60 p-4 rounded-xl border border-slate-700/60">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/60">
                             <div>
-                                <span class="text-slate-400 font-semibold uppercase">Customer Details</span>
-                                <div class="font-bold text-white text-sm mt-0.5"><?= e($order['customer_name']) ?></div>
-                                <div class="text-blue-400 mt-0.5">
-                                    <a href="tel:<?= e($order['customer_phone']) ?>" class="hover:underline"><?= e($order['customer_phone']) ?></a>
+                                <span class="text-slate-500 dark:text-slate-400 font-semibold uppercase">Customer Details</span>
+                                <div class="font-bold text-slate-900 dark:text-white text-sm mt-0.5"><?= e($order['customer_name']) ?></div>
+                                <div class="text-blue-600 dark:text-blue-400 mt-0.5">
+                                    <a href="tel:<?= e($order['customer_phone']) ?>" class="hover:underline font-mono"><?= e($order['customer_phone']) ?></a>
                                 </div>
                                 <?php if (!empty($order['customer_email'])): ?>
-                                    <div class="text-slate-400 truncate"><?= e($order['customer_email']) ?></div>
+                                    <div class="text-slate-500 dark:text-slate-400 truncate mt-0.5"><?= e($order['customer_email']) ?></div>
                                 <?php endif; ?>
                             </div>
 
                             <div>
-                                <span class="text-slate-400 font-semibold uppercase">Print Specifications</span>
-                                <div class="font-bold text-white mt-0.5"><?= e($order['print_type']) ?> (<?= e($order['sides']) ?>)</div>
-                                <div class="text-slate-300 mt-0.5"><?= e($order['paper_size']) ?> • <?= e($order['copies']) ?> Copy(ies)</div>
+                                <span class="text-slate-500 dark:text-slate-400 font-semibold uppercase">Print Specifications</span>
+                                <div class="font-bold text-slate-900 dark:text-white mt-0.5"><?= e($order['print_type']) ?> &bull; <?= e($order['sides']) ?></div>
+                                <div class="text-slate-600 dark:text-slate-300 mt-0.5"><?= e($order['paper_size']) ?> &bull; <?= e($order['copies']) ?> Copy(ies)</div>
                             </div>
 
                             <div>
-                                <span class="text-slate-400 font-semibold uppercase">Estimated Charges</span>
-                                <div class="font-black text-emerald-400 text-base mt-0.5"><?= formatCurrency($order['estimated_amount']) ?></div>
-                                <div class="text-slate-400 mt-0.5"><?= count($files) ?> Document(s) attached</div>
+                                <span class="text-slate-500 dark:text-slate-400 font-semibold uppercase">Estimated Charges</span>
+                                <div class="font-black text-emerald-600 dark:text-emerald-400 text-base mt-0.5"><?= formatCurrency($order['estimated_amount']) ?></div>
+                                <div class="text-slate-500 dark:text-slate-400 mt-0.5"><?= count($files) ?> Document(s) attached</div>
                             </div>
 
                             <div>
-                                <span class="text-slate-400 font-semibold uppercase">Customer Notes</span>
-                                <div class="text-slate-300 mt-0.5 italic">
-                                    <?= !empty($order['notes']) ? nl2br(e($order['notes'])) : 'No special instructions.' ?>
+                                <span class="text-slate-500 dark:text-slate-400 font-semibold uppercase">Customer Notes</span>
+                                <div class="text-slate-600 dark:text-slate-300 mt-0.5 italic">
+                                    <?= !empty($order['notes']) ? nl2br(e($order['notes'])) : 'None provided' ?>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Uploaded Files List with Direct Download -->
-                        <div>
-                            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 block">
-                                Attached Documents to Print (<?= count($files) ?>)
+                        <!-- Documents Attached List & Download -->
+                        <div class="space-y-2">
+                            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                                Customer Uploaded Documents (<?= count($files) ?>):
                             </span>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                                 <?php foreach ($files as $f): 
-                                    $ext = strtolower(pathinfo($f['original_name'], PATHINFO_EXTENSION));
-                                    $sizeKb = round(($f['size'] ?? 0) / 1024, 1);
-                                    $downloadUrl = "download.php?file=" . urlencode($f['stored_name']) . "&name=" . urlencode($f['original_name']);
+                                    $origName = $f['original_name'] ?? 'Document';
+                                    $storedName = $f['stored_name'] ?? '';
+                                    $sizeBytes = $f['size_bytes'] ?? 0;
+                                    $downloadUrl = "download.php?file=" . urlencode(basename($storedName)) . "&name=" . urlencode($origName);
                                 ?>
-                                    <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-blue-500/50 transition">
-                                        <div class="flex items-center gap-2.5 truncate mr-2">
-                                            <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
-                                                <i data-lucide="file" class="w-4 h-4"></i>
-                                            </div>
-                                            <div class="truncate">
-                                                <div class="text-xs font-bold text-white truncate" title="<?= e($f['original_name']) ?>"><?= e($f['original_name']) ?></div>
-                                                <div class="text-[11px] text-slate-400"><?= $sizeKb ?> KB • <?= strtoupper($ext) ?></div>
-                                            </div>
+                                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 text-xs">
+                                        <div class="flex items-center gap-2 truncate pr-2">
+                                            <i data-lucide="file" class="w-4 h-4 text-blue-500 shrink-0"></i>
+                                            <span class="truncate font-medium text-slate-800 dark:text-slate-200" title="<?= e($origName) ?>"><?= e($origName) ?></span>
+                                            <span class="text-[10px] text-slate-400 shrink-0">(<?= round($sizeBytes / 1024, 1) ?> KB)</span>
                                         </div>
-                                        <a href="<?= $downloadUrl ?>" target="_blank" class="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1 transition shrink-0" title="Download & Print Document">
-                                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                        <a href="<?= $downloadUrl ?>" target="_blank" class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 dark:text-white font-semibold transition shrink-0 flex items-center gap-1 shadow-sm">
+                                            <i data-lucide="download" class="w-3 h-3"></i>
                                             <span>Open</span>
                                         </a>
                                     </div>

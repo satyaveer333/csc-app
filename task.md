@@ -96,6 +96,26 @@ This document serves as the master persistence and connection point between AI s
   - *Action*: Documented exact server-side steps to pull latest code, resolve local SQLite untrack conflict, import `schema.sql` in phpMyAdmin/MySQL CLI, switch config to MySQL, and verify server PHP extensions (`pdo_mysql`).
   - *Status*: ✅ Completed.
 
+### 5. UI Modernization, Field Checks, Security Gate & Responsive Scaling
+- [x] **5.1 Weekday Checklist & Time Selector Menu for Opening Hours**
+  - *Action*: Replaced raw opening hours text field in `owner/settings.php` with 7 individual weekday checkboxes (Mon-Sun), quick preset buttons (Mon-Sat, Mon-Fri, All 7 Days), Start & End time pickers, and live customer preview renderer. Formats and stores standard human-readable string alongside structured schedule settings.
+  - *Status*: ✅ Completed.
+- [x] **5.2 Strict 10-Digit Phone Number Enforcement**
+  - *Action*: Enforced 10-digit mobile number validation across owner profile (`owner/settings.php`), citizen print submission (`index.php`, `api/submit_print.php`), and tracking lookup (`api/track_order.php`). Added HTML pattern `[0-9]{10}`, `maxlength="10"`, client-side non-digit stripping, and strict PHP regex validation (`preg_match('/^[0-9]{10}$/')`).
+  - *Status*: ✅ Completed.
+- [x] **5.3 Developer Email Confirmation Gate for Email Delivery Method**
+  - *Action*: Enforced developer verification check when altering `mail_method` or configuring SMTP in `owner/settings.php`. Changes are strictly blocked unless confirmed by providing developer email (`vyasthperson@gmail.com`).
+  - *Status*: ✅ Completed.
+- [x] **5.4 Comprehensive Data Sanitization & Input Validation**
+  - *Action*: Applied `strip_tags()`, `trim()`, string length limits, date consistency checks (`last_date >= start_date` in `owner/forms.php`), URL validation (`filter_var(..., FILTER_VALIDATE_URL)`), numeric non-negative clamps (`max(0, ...)` in `owner/inventory.php` & pricing rates), and email validation (`FILTER_VALIDATE_EMAIL`) across all owner forms and citizen APIs.
+  - *Status*: ✅ Completed.
+- [x] **5.5 Owner Portal Light Mode Support & Persistent Theme Switcher**
+  - *Action*: Configured Tailwind CSS `darkMode: 'class'` across all owner portal pages (`owner/index.php`, `owner/forms.php`, `owner/inventory.php`, `owner/print_orders.php`, `owner/settings.php`, `owner/login.php`). Added interactive Sun/Moon theme toggle in `owner/nav.php` and `owner/login.php` with instant `localStorage` persistence and zero-flicker `<head>` initializers.
+  - *Status*: ✅ Completed.
+- [x] **5.6 Multi-Device Responsive Scaling (Customer & Owner Portals)**
+  - *Action*: Optimized layouts, typography, flex-wrapping, modals (`w-[96%] sm:w-full max-h-[92vh]`), and tables (`overflow-x-auto`) to scale cleanly on all screen sizes from small mobile displays (320px-375px) up to ultra-wide desktop monitors.
+  - *Status*: ✅ Completed.
+
 ---
 
 ## 📈 Automated Verification Suite Results
