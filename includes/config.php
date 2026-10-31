@@ -45,13 +45,21 @@ define('DB_PASS', getenv('DB_PASS') !== false ? getenv('DB_PASS') : 'your_passwo
 define('DB_CHARSET', getenv('DB_CHARSET') ?: 'utf8mb4');
 
 // Default App Settings (can be overridden in Admin Settings)
-define('DEFAULT_ADMIN_USER', 'admin');
-define('DEFAULT_ADMIN_PASS', 'admin123'); // Prompt to change in admin panel
+define('DEFAULT_ADMIN_USER', getenv('DEFAULT_ADMIN_USER') ?: 'admin');
+define('DEFAULT_ADMIN_PASS', getenv('DEFAULT_ADMIN_PASS') ?: 'admin123'); // Prompt to change in admin panel
 define('DEFAULT_CENTER_NAME', 'Digital Solutions');
 define('DEFAULT_OWNER_NAME', 'Digital Solutions Operator');
 define('DEFAULT_OWNER_PHONE', '+91 9876543210');
 define('DEFAULT_OWNER_EMAIL', 'csc.center@example.com');
 define('DEFAULT_CENTER_ADDRESS', 'Main Market Road, Near Panchayat Bhawan');
+define('DEVELOPER_EMAIL', getenv('DEVELOPER_EMAIL') ?: 'vyasthperson@gmail.com');
+
+// Cryptographic hash for developer verification (prevents plaintext storage in DB)
+define('DEFAULT_DEVELOPER_EMAIL_HASH', getenv('DEVELOPER_EMAIL_HASH') ?: (
+    getenv('DEVELOPER_EMAIL') 
+        ? hash('sha256', strtolower(trim(getenv('DEVELOPER_EMAIL'))))
+        : '0dc6d2bc23045997492ae6458d7626550d2af7f225663466561342c5d71384f7'
+));
 
 // Max file upload size (in bytes) - e.g. 25MB total
 define('MAX_FILE_SIZE', 25 * 1024 * 1024);

@@ -48,6 +48,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Strict 10-digit phone number check
         $cleanPhone = preg_replace('/[^0-9]/', '', $rawPhone);
+        if (strlen($cleanPhone) === 12 && substr($cleanPhone, 0, 2) === '91') {
+            $cleanPhone = substr($cleanPhone, 2);
+        } elseif (strlen($cleanPhone) === 11 && substr($cleanPhone, 0, 1) === '0') {
+            $cleanPhone = substr($cleanPhone, 1);
+        }
         if (strlen($cleanPhone) !== 10) {
             setFlash('danger', 'Phone number must be exactly 10 digits (digits only, e.g. 9876543210).');
             header('Location: settings.php');
@@ -61,10 +66,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $validDayKeys = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         $filteredDays = array_values(array_intersect($validDayKeys, $selectedDays));
+        $legacyHours = trim(strip_tags($_POST['opening_hours'] ?? ''));
+
         if (empty($filteredDays)) {
-            setFlash('danger', 'Please select at least one operating day for opening hours.');
-            header('Location: settings.php');
-            exit;
+            if (!empty($legacyHours)) {
+                $filteredDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            } else {
+                setFlash('danger', 'Please select at least one operating day for opening hours.');
+                header('Location: settings.php');
+                exit;
+            }
         }
 
         $timeStart = trim($_POST['opening_time_start'] ?? '09:00');
@@ -75,17 +86,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $startFormatted = date('g:i A', strtotime("2000-01-01 $timeStart"));
         $endFormatted = date('g:i A', strtotime("2000-01-01 $timeEnd"));
 
-        if (count($filteredDays) === 7) {
-            $daysSummary = '(Everyday)';
-        } elseif ($filteredDays === ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']) {
-            $daysSummary = '(Mon - Sat)';
-        } elseif ($filteredDays === ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']) {
-            $daysSummary = '(Mon - Fri)';
+        if (!empty($legacyHours) && empty($_POST['opening_days'])) {
+            $formattedOpeningHours = $legacyHours;
         } else {
-            $daysSummary = '(' . implode(', ', $filteredDays) . ')';
+            if (count($filteredDays) === 7) {
+                $daysSummary = '(Everyday)';
+            } elseif ($filteredDays === ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']) {
+                $daysSummary = '(Mon - Sat)';
+            } elseif ($filteredDays === ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']) {
+                $daysSummary = '(Mon - Fri)';
+            } else {
+                $daysSummary = '(' . implode(', ', $filteredDays) . ')';
+            }
+            $formattedOpeningHours = "{$startFormatted} - {$endFormatted} {$daysSummary}";
         }
-
-        $formattedOpeningHours = "{$startFormatted} - {$endFormatted} {$daysSummary}";
 
         updateSetting('center_name', $centerName, $pdo);
         updateSetting('owner_name', $ownerName, $pdo);
@@ -122,9 +136,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $developerEmailInput = strtolower(trim($_POST['developer_email'] ?? ''));
 
         // Developer confirmation check required if changing delivery method or configuring SMTP
+        // Verified via secure SHA-256 hash stored in DB / config (zero plain text storage)
         if ($isMethodChanging || $isConfiguringSmtp) {
-            if ($developerEmailInput !== 'vyasthperson@gmail.com') {
-                setFlash('danger', 'Developer Verification Failed: The email delivery method or SMTP settings can only be altered after confirmation from the authorized developer (vyasthperson@gmail.com).');
+            $inputHash = hash('sha256', $developerEmailInput);
+            $storedHash = getSetting('developer_email_hash', DEFAULT_DEVELOPER_EMAIL_HASH, $pdo);
+            if (!hash_equals($storedHash, $inputHash)) {
+                setFlash('danger', 'Developer Verification Failed: The email delivery method or SMTP settings can only be altered after confirmation from the authorized developer.');
                 header('Location: settings.php');
                 exit;
             }
@@ -138,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         updateSetting('smtp_port', (string)$smtpPort, $pdo);
         updateSetting('smtp_user', trim(strip_tags($_POST['smtp_user'] ?? '')), $pdo);
         if (!empty($_POST['smtp_pass'])) {
-            updateSetting('smtp_pass', trim($_POST['smtp_pass']), $pdo);
+            updateSetting('smtp_pass', encryptSensitiveData(trim($_POST['smtp_pass'])), $pdo);
         }
         $smtpSecure = in_array($_POST['smtp_secure'] ?? '', ['tls', 'ssl', 'none']) ? $_POST['smtp_secure'] : 'tls';
         updateSetting('smtp_secure', $smtpSecure, $pdo);
@@ -452,7 +469,7 @@ $cleanOwnerPhoneDisplay = strlen($rawStoredPhone) >= 10 ? substr($rawStoredPhone
                         Changing the email delivery method or updating custom SMTP requires developer confirmation. Please enter the authorized developer email address:
                     </p>
                     <div class="max-w-md">
-                        <input type="email" name="developer_email" id="developerEmailInput" placeholder="Enter developer email (vyasthperson@gmail.com) to confirm"
+                        <input type="email" name="developer_email" id="developerEmailInput" placeholder="Enter authorized developer email to confirm"
                                class="w-full px-3.5 py-2 text-xs rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-amber-500">
                     </div>
                 </div>

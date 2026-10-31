@@ -32,7 +32,7 @@ INSERT INTO `settings` (`setting_key`, `setting_value`) VALUES
   ('center_name', 'Digital veer'),
   ('owner_name', 'VLE Operator'),
   ('owner_phone', '+91 9876543210'),
-  ('owner_email', 'vyasthperson@gmail.com'),
+  ('owner_email', 'csc.center@example.com'),
   ('center_address', 'Near Bus Stand, Main Market'),
   ('vle_id', 'VLE-123456'),
   ('opening_hours', '8:30 AM - 8:30 PM'),
@@ -46,7 +46,8 @@ INSERT INTO `settings` (`setting_key`, `setting_value`) VALUES
   ('smtp_port', '587'),
   ('smtp_user', ''),
   ('smtp_pass', ''),
-  ('smtp_secure', 'tls');
+  ('smtp_secure', 'tls'),
+  ('developer_email_hash', '0dc6d2bc23045997492ae6458d7626550d2af7f225663466561342c5d71384f7');
 
 -- --------------------------------------------------------------------
 -- 2. Table structure for table `forms`

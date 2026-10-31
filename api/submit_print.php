@@ -205,5 +205,5 @@ try {
     ]);
 } catch (Exception $e) {
     error_log("Order Submission Error: " . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'Failed to save order. Error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'An error occurred while saving your order. Please try again or visit our center.']);
 }

@@ -41,15 +41,34 @@ function getDbConnection() {
         return $pdo;
     } catch (PDOException $e) {
         error_log('Database Connection Error: ' . $e->getMessage());
-        $msg = htmlspecialchars($e->getMessage());
-        $hint = (DB_DRIVER === 'mysql')
-            ? "Using MySQL driver. Please verify that MySQL is running, the database <code>" . htmlspecialchars(DB_NAME) . "</code> exists, and credentials in <code>includes/config.php</code> are correct. You can also import <code>schema.sql</code> via phpMyAdmin or MySQL CLI."
-            : "If running in Docker on Linux, ensure the <code>data/</code> folder has write permissions (run: <code>chmod -R 777 data uploads</code>).";
-        die("<div style='font-family:system-ui,sans-serif;max-width:620px;margin:50px auto;padding:24px;border:1px solid #f87171;border-radius:16px;background:#fef2f2;color:#991b1b;box-shadow:0 4px 12px rgba(0,0,0,0.05);'>
-            <h3 style='margin:0 0 10px 0;font-size:18px;'>Database Connection Error</h3>
-            <p style='margin:0 0 12px 0;font-size:14px;'><strong>Details:</strong> {$msg}</p>
-            <p style='font-size:13px;color:#7f1d1d;margin:0;'>{$hint}</p>
-        </div>");
+        if (!headers_sent()) {
+            http_response_code(503);
+        }
+        die("<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Service Unavailable - Digital Seva Portal</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .card { max-width: 480px; width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px; text-align: center; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); }
+        .icon { width: 48px; height: 48px; margin: 0 auto 16px; color: #f59e0b; }
+        h1 { font-size: 20px; font-weight: 700; margin: 0 0 10px; color: #ffffff; }
+        p { font-size: 14px; color: #94a3b8; line-height: 1.6; margin: 0 0 24px; }
+        .btn { display: inline-block; padding: 10px 20px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 10px; font-size: 14px; font-weight: 600; transition: background 0.2s; }
+        .btn:hover { background: #1d4ed8; }
+    </style>
+</head>
+<body>
+    <div class='card'>
+        <svg class='icon' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'/></svg>
+        <h1>Service Temporarily Unavailable</h1>
+        <p>Our service is currently experiencing technical difficulties. Our system administrators have been notified. Please try again in a few moments.</p>
+        <a href='javascript:location.reload()' class='btn'>Refresh Page</a>
+    </div>
+</body>
+</html>");
     }
 }
 
@@ -150,6 +169,7 @@ function initDatabaseTables($pdo) {
             'smtp_user' => '',
             'smtp_pass' => '',
             'smtp_secure' => 'tls',
+            'developer_email_hash' => DEFAULT_DEVELOPER_EMAIL_HASH,
         ];
 
         $ins = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (:k, :v)");

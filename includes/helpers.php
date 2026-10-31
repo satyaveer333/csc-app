@@ -113,3 +113,67 @@ function getFlash() {
     }
     return null;
 }
+
+/**
+ * Application Secret Key Derivation for Sensitive Data Encryption at Rest
+ */
+function getAppSecretKey() {
+    static $key = null;
+    if ($key !== null) {
+        return $key;
+    }
+    $envKey = getenv('APP_SECRET_KEY');
+    if (!empty($envKey)) {
+        $key = hash('sha256', $envKey, true);
+    } else {
+        $key = hash('sha256', (defined('APP_ROOT') ? APP_ROOT : __DIR__) . '_csc_portal_secret_salt_2026', true);
+    }
+    return $key;
+}
+
+/**
+ * Encrypt sensitive credentials (e.g. SMTP password) before storing in DB.
+ * Stored as an authenticated ciphertext string in format ENC:<base64(iv . hmac . ciphertext)>.
+ */
+function encryptSensitiveData($plaintext) {
+    if ($plaintext === '' || $plaintext === null) {
+        return '';
+    }
+    if (!extension_loaded('openssl')) {
+        return (string)$plaintext;
+    }
+    $key = getAppSecretKey();
+    $iv = random_bytes(16);
+    $cipher = openssl_encrypt((string)$plaintext, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+    $hmac = hash_hmac('sha256', $iv . $cipher, $key, true);
+    return 'ENC:' . base64_encode($iv . $hmac . $cipher);
+}
+
+/**
+ * Decrypt sensitive credentials retrieved from DB.
+ */
+function decryptSensitiveData($ciphertext) {
+    if (empty($ciphertext) || !is_string($ciphertext)) {
+        return '';
+    }
+    if (strpos($ciphertext, 'ENC:') !== 0) {
+        return $ciphertext; // Return as-is if unencrypted or legacy
+    }
+    if (!extension_loaded('openssl')) {
+        return '';
+    }
+    $raw = base64_decode(substr($ciphertext, 4), true);
+    if ($raw === false || strlen($raw) < 48) {
+        return '';
+    }
+    $iv = substr($raw, 0, 16);
+    $hmac = substr($raw, 16, 32);
+    $cipher = substr($raw, 48);
+    $key = getAppSecretKey();
+    $expectedHmac = hash_hmac('sha256', $iv . $cipher, $key, true);
+    if (!hash_equals($expectedHmac, $hmac)) {
+        return ''; // Data has been tampered with or invalid key
+    }
+    $decrypted = openssl_decrypt($cipher, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+    return $decrypted !== false ? $decrypted : '';
+}

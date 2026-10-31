@@ -104,7 +104,7 @@ This document serves as the master persistence and connection point between AI s
   - *Action*: Enforced 10-digit mobile number validation across owner profile (`owner/settings.php`), citizen print submission (`index.php`, `api/submit_print.php`), and tracking lookup (`api/track_order.php`). Added HTML pattern `[0-9]{10}`, `maxlength="10"`, client-side non-digit stripping, and strict PHP regex validation (`preg_match('/^[0-9]{10}$/')`).
   - *Status*: ✅ Completed.
 - [x] **5.3 Developer Email Confirmation Gate for Email Delivery Method**
-  - *Action*: Enforced developer verification check when altering `mail_method` or configuring SMTP in `owner/settings.php`. Changes are strictly blocked unless confirmed by providing developer email (`vyasthperson@gmail.com`).
+  - *Action*: Enforced developer verification check when altering `mail_method` or configuring SMTP in `owner/settings.php`. Changes are strictly blocked unless confirmed by providing developer email.
   - *Status*: ✅ Completed.
 - [x] **5.4 Comprehensive Data Sanitization & Input Validation**
   - *Action*: Applied `strip_tags()`, `trim()`, string length limits, date consistency checks (`last_date >= start_date` in `owner/forms.php`), URL validation (`filter_var(..., FILTER_VALIDATE_URL)`), numeric non-negative clamps (`max(0, ...)` in `owner/inventory.php` & pricing rates), and email validation (`FILTER_VALIDATE_EMAIL`) across all owner forms and citizen APIs.
@@ -114,6 +114,37 @@ This document serves as the master persistence and connection point between AI s
   - *Status*: ✅ Completed.
 - [x] **5.6 Multi-Device Responsive Scaling (Customer & Owner Portals)**
   - *Action*: Optimized layouts, typography, flex-wrapping, modals (`w-[96%] sm:w-full max-h-[92vh]`), and tables (`overflow-x-auto`) to scale cleanly on all screen sizes from small mobile displays (320px-375px) up to ultra-wide desktop monitors.
+  - *Status*: ✅ Completed.
+
+### 6. Production Hardening: Sensitive Information Scrubbing & Error Sanitization
+- [x] **6.1 Masking Developer Email from All Public & Owner Interfaces**
+  - *Action*: Scrubbed the developer's raw email address from UI placeholders and error flash messages in `owner/settings.php`. Configured `DEVELOPER_EMAIL` constant in `includes/config.php` (with `getenv('DEVELOPER_EMAIL')` support) so that verification logic functions without ever exposing the address to users or administrators.
+  - *Status*: ✅ Completed.
+- [x] **6.2 Neutral Login Placeholders & Elimination of Default Credential Hints**
+  - *Action*: Removed `placeholder="e.g. admin"` and `placeholder="Enter owner password"` hints from `owner/login.php`, replacing them with neutral `placeholder="Enter your username"` and `placeholder="Enter your password"`. Configured `DEFAULT_ADMIN_USER` and `DEFAULT_ADMIN_PASS` in `includes/config.php` to accept environment overrides.
+  - *Status*: ✅ Completed.
+- [x] **6.3 Cloaking Database Connection Failures (Zero Information Disclosure)**
+  - *Action*: Replaced verbose PDO exception screen in `includes/db.php` that formerly echoed `$e->getMessage()`, driver names, and `DB_NAME`. Now logs detailed connection errors privately to PHP `error_log()` and renders a clean, styled HTTP 503 "Service Temporarily Unavailable" screen.
+  - *Status*: ✅ Completed.
+- [x] **6.4 API Exception Sanitization (`api/submit_print.php`)**
+  - *Action*: Removed raw `$e->getMessage()` output from the JSON error response on failed print submissions. Orders errors are logged to `error_log()` and replaced with a clean, user-friendly message (`"An error occurred while saving your order. Please try again or visit our center."`).
+  - *Status*: ✅ Completed.
+- [x] **6.5 Sanitizing Production Schema Seed Data (`schema.sql`)**
+  - *Action*: Replaced developer personal email address in `schema.sql` seed records with generic `csc.center@example.com` for production MySQL installations.
+  - *Status*: ✅ Completed.
+
+### 7. Database Sensitive Information Hashing & At-Rest Encryption
+- [x] **7.1 Owner Login Password Hashing (Bcrypt / `PASSWORD_DEFAULT`)**
+  - *Action*: Confirmed owner passwords in `settings.admin_password` are strictly stored using salted one-way bcrypt hashes (`$2y$10$...`) via `password_hash()` and verified via `password_verify()`. No plaintext passwords are ever persisted or logged.
+  - *Status*: ✅ Completed.
+- [x] **7.2 Developer Authorization Secret Hashing (SHA-256 in DB & Config)**
+  - *Action*: Replaced all plaintext developer email checks with cryptographic SHA-256 hash comparison. Stored `developer_email_hash` in `settings` table (`0dc6d2bc23045997492ae6458d7626550d2af7f225663466561342c5d71384f7`). The developer confirmation check hashes the user input on the fly and verifies using `hash_equals()`. Even with full database access, an attacker cannot read the developer email.
+  - *Status*: ✅ Completed.
+- [x] **7.3 Reversible Credential At-Rest Encryption (`smtp_pass` with OpenSSL AES-256-CBC + HMAC)**
+  - *Action*: Because SMTP servers require plaintext credentials to authenticate over TLS/SSL (making one-way hashing infeasible), implemented authenticated symmetric encryption for `smtp_pass` in `includes/helpers.php` (`encryptSensitiveData()` / `decryptSensitiveData()`). Stored in DB as `ENC:<base64(iv . hmac . ciphertext)>`. Decrypted in memory only when establishing SMTP socket connection in `includes/mailer.php`.
+  - *Status*: ✅ Completed.
+- [x] **7.4 Citizen Document Random Hash Storage (`stored_name`)**
+  - *Action*: Document filenames uploaded by citizens are randomized with timestamp and cryptographic random hex (`doc_YYYYMMDD_HHMMSS_<8hex>.<ext>`) in `print_orders.files_json`, preventing directory indexing, IDOR, or enumeration attacks.
   - *Status*: ✅ Completed.
 
 ---

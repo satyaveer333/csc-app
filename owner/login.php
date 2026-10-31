@@ -96,7 +96,7 @@ $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Username</label>
                 <div class="relative">
                     <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5"></i>
-                    <input type="text" name="username" required autofocus placeholder="e.g. admin"
+                    <input type="text" name="username" required autofocus placeholder="Enter your username"
                            class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
                 </div>
             </div>
@@ -105,7 +105,7 @@ $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Password</label>
                 <div class="relative">
                     <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5"></i>
-                    <input type="password" name="password" required placeholder="Enter owner password"
+                    <input type="password" name="password" required placeholder="Enter your password"
                            class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
                 </div>
             </div>

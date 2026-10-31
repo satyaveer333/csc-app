@@ -154,7 +154,7 @@ function sendViaSmtpSocket($to, $subject, $body, $headers, $pdo) {
     $host = getSetting('smtp_host', '', $pdo);
     $port = (int)getSetting('smtp_port', 587, $pdo);
     $user = getSetting('smtp_user', '', $pdo);
-    $pass = getSetting('smtp_pass', '', $pdo);
+    $pass = decryptSensitiveData(getSetting('smtp_pass', '', $pdo));
     $secure = getSetting('smtp_secure', 'tls', $pdo);
 
     if (empty($host) || empty($user)) {
