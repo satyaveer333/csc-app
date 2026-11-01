@@ -50,13 +50,13 @@ function updateSetting($key, $value, $pdo = null) {
         $stmt = $pdo->prepare("
             INSERT INTO settings (setting_key, setting_value, updated_at) 
             VALUES (:k, :v, datetime('now'))
-            ON CONFLICT(setting_key) DO UPDATE SET setting_value = :v, updated_at = datetime('now')
+            ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = datetime('now')
         ");
     } else {
         $stmt = $pdo->prepare("
             INSERT INTO settings (setting_key, setting_value, updated_at) 
             VALUES (:k, :v, CURRENT_TIMESTAMP)
-            ON DUPLICATE KEY UPDATE setting_value = :v, updated_at = CURRENT_TIMESTAMP
+            ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = CURRENT_TIMESTAMP
         ");
     }
     $result = $stmt->execute([':k' => $key, ':v' => $value]);

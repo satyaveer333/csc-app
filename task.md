@@ -201,6 +201,17 @@ This document serves as the master persistence and connection point between AI s
   - *Action*: Verified `.env` is ignored by Git in `.gitignore` and protected against direct browser HTTP access with HTTP 403 Forbidden in `.htaccess`. Created `.env.example` as a version-controlled deployment template.
   - *Status*: ✅ Completed & Verified.
 
+### 11. Production MySQL Compatibility & Email Deliverability Hardening
+- [x] **11.1 Fix MySQL Native Prepared Statement Placeholder Count Mismatch**
+  - *Action*: In `registerActiveSession()` ([`includes/auth.php`](file:///home/satyaveer/Desktop/Projects/csc-app/includes/auth.php)), replaced duplicate `:now` and `:ip` tokens in `INSERT ... ON DUPLICATE KEY UPDATE` with unique parameters and MySQL's standard `VALUES(col)` expression. Updated `updateSetting()` ([`includes/helpers.php`](file:///home/satyaveer/Desktop/Projects/csc-app/includes/helpers.php)) to use `VALUES(setting_value)` on MySQL and `excluded.setting_value` on SQLite. Enabled `PDO::ATTR_EMULATE_PREPARES => true` in [`includes/db.php`](file:///home/satyaveer/Desktop/Projects/csc-app/includes/db.php) to ensure client-side parameter substitution, eliminating `SQLSTATE[HY093]` fatal errors across MySQL and MariaDB.
+  - *Status*: ✅ Completed & Verified.
+- [x] **11.2 Graceful `mbstring` Extension Fallback**
+  - *Action*: Replaced raw `mb_substr()` calls in [`includes/auth.php`](file:///home/satyaveer/Desktop/Projects/csc-app/includes/auth.php) with `function_exists('mb_substr') ? mb_substr(...) : substr(...)` so environments without `php-mbstring` do not throw fatal undefined function errors.
+  - *Status*: ✅ Completed & Verified.
+- [x] **11.3 Strict Server Domain Sender for cPanel SPF Deliverability**
+  - *Action*: In [`includes/mailer.php`](file:///home/satyaveer/Desktop/Projects/csc-app/includes/mailer.php), configured native `php_mail` to strictly use the server's own domain address (`noreply@` + domain) as `From:` header while setting `Reply-To:` to the owner's actual contact email. Prevents cPanel Exim from dropping outgoing emails due to SPF / anti-spoofing violations against `@gmail.com` addresses.
+  - *Status*: ✅ Completed & Verified.
+
 ---
 
 ## 📈 Automated Verification Suite Results

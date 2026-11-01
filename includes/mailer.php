@@ -84,11 +84,22 @@ function sendPrintOrderEmail($order, $files, $pdo = null) {
     // Setup headers and multipart boundary for attachments
     $boundary = "==Multipart_Boundary_x" . md5(time()) . "x";
 
-    $fromEmail = getSetting('smtp_user');
-    if (empty($fromEmail) || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
-        // Fallback to Serverbyt local sender or owner email
-        $serverHost = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'serverbyt.local';
-        $fromEmail = "noreply@" . preg_replace('/^www\./', '', $serverHost);
+    $mailMethod = getSetting('mail_method', '', $pdo);
+    if (empty($mailMethod)) {
+        $mailMethod = getenv('MAIL_METHOD') ?: 'php_mail';
+    }
+
+    $serverHost = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'serverbyt.local';
+    $serverSender = "noreply@" . preg_replace('/^www\./', '', $serverHost);
+
+    if ($mailMethod === 'smtp') {
+        $fromEmail = getSetting('smtp_user', '', $pdo) ?: getenv('SMTP_USER');
+        if (empty($fromEmail) || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+            $fromEmail = $serverSender;
+        }
+    } else {
+        // Native php_mail must use server domain to satisfy cPanel/Exim SPF anti-spoofing policies
+        $fromEmail = $serverSender;
     }
 
     // Sanitize headers to prevent email header injection
@@ -129,10 +140,6 @@ function sendPrintOrderEmail($order, $files, $pdo = null) {
     $body .= "--{$boundary}--";
 
     $mailSuccess = false;
-    $mailMethod = getSetting('mail_method', 'php_mail', $pdo);
-    if ($mailMethod === 'php_mail' && getenv('MAIL_METHOD') === 'smtp') {
-        $mailMethod = 'smtp';
-    }
 
     if ($mailMethod === 'smtp') {
         // SMTP sending via socket
@@ -273,27 +280,36 @@ function sendGeneralEmail($toEmail, $subject, $htmlMessage, $pdo = null) {
     $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
     $safeCenterName = str_replace(["\r", "\n"], '', $centerName);
 
-    $fromEmail = getSetting('smtp_user', '', $pdo);
-    if (empty($fromEmail)) {
-        $fromEmail = getenv('SMTP_USER') ?: '';
+    $mailMethod = getSetting('mail_method', '', $pdo);
+    if (empty($mailMethod)) {
+        $mailMethod = getenv('MAIL_METHOD') ?: 'php_mail';
     }
-    if (empty($fromEmail) || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
-        $serverHost = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'serverbyt.local';
-        $fromEmail = "noreply@" . preg_replace('/^www\./', '', $serverHost);
+
+    $serverHost = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'serverbyt.local';
+    $serverSender = "noreply@" . preg_replace('/^www\./', '', $serverHost);
+
+    if ($mailMethod === 'smtp') {
+        $fromEmail = getSetting('smtp_user', '', $pdo) ?: getenv('SMTP_USER');
+        if (empty($fromEmail) || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+            $fromEmail = $serverSender;
+        }
+    } else {
+        // Native php_mail must use server domain to satisfy cPanel/Exim SPF anti-spoofing policies
+        $fromEmail = $serverSender;
     }
     $fromEmail = str_replace(["\r", "\n"], '', $fromEmail);
 
+    $ownerEmail = getSetting('owner_email', '', $pdo) ?: (getenv('DEFAULT_OWNER_EMAIL') ?: $fromEmail);
+    $replyTo = filter_var($ownerEmail, FILTER_VALIDATE_EMAIL) ? $ownerEmail : $fromEmail;
+    $replyTo = str_replace(["\r", "\n"], '', $replyTo);
+
     $headers  = "From: {$safeCenterName} <{$fromEmail}>\r\n";
-    $headers .= "Reply-To: {$fromEmail}\r\n";
+    $headers .= "Reply-To: {$safeCenterName} <{$replyTo}>\r\n";
     $headers .= "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
     $headers .= "Content-Transfer-Encoding: 8bit\r\n";
 
     $mailSuccess = false;
-    $mailMethod = getSetting('mail_method', 'php_mail', $pdo);
-    if ($mailMethod === 'php_mail' && getenv('MAIL_METHOD') === 'smtp') {
-        $mailMethod = 'smtp';
-    }
 
     if ($mailMethod === 'smtp') {
         $mailSuccess = sendViaSmtpSocket($toEmail, $subject, $htmlMessage, $headers, $pdo);

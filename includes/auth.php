@@ -358,6 +358,9 @@ function logLoginAttempt($username, $status, $failureReason = '', $deviceFingerp
         $deviceFingerprint = hash('sha256', ($userAgent . '|' . $ip));
     }
 
+    $safeUa = function_exists('mb_substr') ? mb_substr($userAgent, 0, 500) : substr($userAgent, 0, 500);
+    $safeReason = function_exists('mb_substr') ? mb_substr($failureReason, 0, 250) : substr($failureReason, 0, 250);
+
     $stmt = $pdo->prepare("
         INSERT INTO login_logs (username, ip_address, user_agent, device_fingerprint, status, failure_reason, created_at)
         VALUES (:user, :ip, :ua, :fp, :status, :reason, :created)
@@ -365,10 +368,10 @@ function logLoginAttempt($username, $status, $failureReason = '', $deviceFingerp
     return $stmt->execute([
         ':user' => $username,
         ':ip' => $ip,
-        ':ua' => mb_substr($userAgent, 0, 500),
+        ':ua' => $safeUa,
         ':fp' => $deviceFingerprint,
         ':status' => $status,
-        ':reason' => mb_substr($failureReason, 0, 250),
+        ':reason' => $safeReason,
         ':created' => date('Y-m-d H:i:s')
     ]);
 }
@@ -409,32 +412,34 @@ function registerActiveSession($sessionId, $deviceFingerprint, $pdo = null) {
     $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
     $details = parseUserAgentDetails($ua);
+    $now = date('Y-m-d H:i:s');
+    $safeUa = function_exists('mb_substr') ? mb_substr($ua, 0, 500) : substr($ua, 0, 500);
 
     $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
     if ($driver === 'sqlite') {
         $stmt = $pdo->prepare("
             INSERT INTO active_sessions (session_id, device_fingerprint, ip_address, user_agent, device_type, browser, platform, last_activity, created_at)
-            VALUES (:sid, :fp, :ip, :ua, :dev, :brow, :plat, :now, :now)
-            ON CONFLICT(session_id) DO UPDATE SET last_activity = :now, ip_address = :ip
+            VALUES (:sid, :fp, :ip, :ua, :dev, :brow, :plat, :now1, :now2)
+            ON CONFLICT(session_id) DO UPDATE SET last_activity = excluded.last_activity, ip_address = excluded.ip_address
         ");
     } else {
         $stmt = $pdo->prepare("
             INSERT INTO active_sessions (session_id, device_fingerprint, ip_address, user_agent, device_type, browser, platform, last_activity, created_at)
-            VALUES (:sid, :fp, :ip, :ua, :dev, :brow, :plat, :now, :now)
-            ON DUPLICATE KEY UPDATE last_activity = :now, ip_address = :ip
+            VALUES (:sid, :fp, :ip, :ua, :dev, :brow, :plat, :now1, :now2)
+            ON DUPLICATE KEY UPDATE last_activity = VALUES(last_activity), ip_address = VALUES(ip_address)
         ");
     }
 
-    $now = date('Y-m-d H:i:s');
     return $stmt->execute([
         ':sid' => $sessionId,
         ':fp' => $deviceFingerprint,
         ':ip' => $ip,
-        ':ua' => mb_substr($ua, 0, 500),
+        ':ua' => $safeUa,
         ':dev' => $details['device_type'],
         ':brow' => $details['browser'],
         ':plat' => $details['platform'],
-        ':now' => $now
+        ':now1' => $now,
+        ':now2' => $now
     ]);
 }
 
