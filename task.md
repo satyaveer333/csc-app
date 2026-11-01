@@ -161,6 +161,65 @@ This document serves as the master persistence and connection point between AI s
   - *Action*: If the owner stops interacting for >30 minutes past midnight (or opens the tab the next morning), the session terminates and redirects to `login.php?reason=midnight`. Added an informative alert banner in `owner/login.php` welcoming the operator to sign in for the new day.
   - *Status*: ✅ Completed.
 
+### 9. 2FA OTP Authentication, Registered Email Workflow, Rate Limiting & Session Management
+- [x] **9.1 Two-Factor Authentication (2FA) via 6-Digit Email OTP (`owner/login.php`)**
+  - *Action*: Implemented a 2-step owner login process. After owner enters valid username and password, portal generates a cryptographically secure 6-digit random code dispatched to owner's email. Login session is only established after successful OTP verification.
+  - *Status*: ✅ Completed & Verified.
+- [x] **9.2 Registered Email Fallback & Persistent Unverified Nag Prompt (`owner/nav.php`)**
+  - *Action*: If no dedicated registered email is configured, the system transparently falls back to `owner_email` (receiving email). A prominent amber alert banner is displayed across all owner portal pages until an official email is registered and verified via 6-digit OTP (`registered_owner_email_verified = '1'`).
+  - *Status*: ✅ Completed & Verified.
+- [x] **9.3 Official Registered Email Verification Workflow (`owner/settings.php`)**
+  - *Action*: Added Card 2 in settings allowing the owner to update and verify their official registered email address. Requires entering a 6-digit OTP sent to the new email address before saving. Once verified, the nag banner disappears immediately.
+  - *Status*: ✅ Completed & Verified.
+- [x] **9.4 Forgot Password via Registered Email OTP (`owner/login.php` & `owner/settings.php`)**
+  - *Action*: Added "Forgot Password" workflows on both login and settings pages. Owners can request a 6-digit recovery OTP dispatched to their registered email to set a new password without needing the old password.
+  - *Status*: ✅ Completed & Verified.
+- [x] **9.5 Brute-Force Rate Limiting & Accidental Double-Click Protection**
+  - *Action*: Implemented login attempt rate limiting (max 5 failed attempts per 15 minutes per IP, with automatic lockout) and OTP dispatch cooldown (60 seconds between resend requests + hourly IP cap). Added global double-touch/double-click prevention scripts across all forms, disabling buttons (`disabled`, `opacity-60`, `pointer-events-none`) for 2.5-3 seconds on submit to prevent accidental double submissions.
+  - *Status*: ✅ Completed & Verified.
+- [x] **9.6 Hashed OTP Storage (SHA-256) & Expired OTP Daily Cleanup (`otps` Table)**
+  - *Action*: All OTPs are stored in the database exclusively as cryptographic SHA-256 hashes (`otp_hash`). Plaintext OTPs are never stored in the DB. Implemented `cleanExpiredOtps()` to purge expired and previous-day OTPs automatically at midnight rollover and opportunistically on OTP generation.
+  - *Status*: ✅ Completed & Verified.
+- [x] **9.7 Login Attempt Security Audit Log (`login_logs` Table)**
+  - *Action*: Every authentication attempt (successful login, failed credentials, OTP dispatched, password reset, rate-limited lockout) is recorded with timestamp, username, IP address, user-agent, status badge, and client device fingerprint. Displayed in an audit table on `owner/settings.php`.
+  - *Status*: ✅ Completed & Verified.
+- [x] **9.8 Client Device Fingerprinting & Interactive Session Management (`active_sessions` Table)**
+  - *Action*: On login, client device fingerprint (combining screen dimensions, color depth, canvas rendering, timezone, and user-agent) is computed and stored. The owner settings page displays all active device sessions with browser, OS/platform, IP, fingerprint, and last activity time. Includes "Revoke" button to remotely kick out individual devices and "Log Out All Other Devices" to terminate all remote sessions at once.
+  - *Status*: ✅ Completed & Verified.
+
+### 10. Centralized Environment Configuration (`.env` & `.env.example`)
+- [x] **10.1 Structured `.env` & `.env.example` Creation**
+  - *Action*: Created `.env` and `.env.example` containing all configurable parameters: app environment (`APP_ENV`, `APP_DEBUG`, `APP_URL`, `APP_TIMEZONE`, `APP_SECRET_KEY`), database options (`DB_DRIVER`, `SQLITE_FILE`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`, `DB_CHARSET`), owner defaults (`DEFAULT_ADMIN_USER`, `DEFAULT_ADMIN_PASS`, `DEVELOPER_EMAIL`, `DEFAULT_CENTER_NAME`, `DEFAULT_OWNER_PHONE`, `DEFAULT_OWNER_EMAIL`), mail settings (`MAIL_METHOD`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`), upload limits (`MAX_FILE_SIZE_MB`, `ALLOWED_EXTENSIONS`), and session/security parameters (`SESSION_LIFETIME`, `MIDNIGHT_POSTPONE_WINDOW`, `LOGIN_RATE_LIMIT_ATTEMPTS`, `OTP_EXPIRY_MINUTES`).
+  - *Status*: ✅ Completed & Verified.
+- [x] **10.2 Native Zero-Dependency `.env` Parser in `includes/config.php`**
+  - *Action*: Implemented a clean, dependency-free `.env` file parser that populates `putenv()`, `$_ENV`, and `$_SERVER` without requiring external Composer libraries.
+  - *Status*: ✅ Completed & Verified.
+- [x] **10.3 Automatic Fallbacks in Email Dispatcher (`includes/mailer.php`)**
+  - *Action*: Enhanced `sendViaSmtpSocket()` and `sendGeneralEmail()` so that if database settings are empty or default, credentials and delivery methods smoothly fall back to values provided in `.env`.
+  - *Status*: ✅ Completed & Verified.
+- [x] **10.4 Web Security & Git Exclusion Verification**
+  - *Action*: Verified `.env` is ignored by Git in `.gitignore` and protected against direct browser HTTP access with HTTP 403 Forbidden in `.htaccess`. Created `.env.example` as a version-controlled deployment template.
+  - *Status*: ✅ Completed & Verified.
+
+---
+
+## 📈 Automated Verification Suite Results
+
+* **Execution Command**: `python3 /home/satyaveer/.gemini/antigravity-cli/brain/cc5ca20f-3011-4b7b-97c4-141042fa14fa/scratch/verify_features.py`
+* **Test Count**: 9 Automated End-to-End Test Suites (100% Passing)
+
+| Test Suite | Coverage & Validations | Result |
+| :--- | :--- | :--- |
+| **TEST 1: Owner Login Step 1** | Credentials verification, 2FA OTP generation, fallback email resolution (`vyasthperson@gmail.com`), SHA-256 hash storage in DB, audit logging (`otp_dispatched`) | ✅ PASS |
+| **TEST 2: Invalid 2FA OTP** | Bad code rejection, attempt counter incrementation, failure audit logging | ✅ PASS |
+| **TEST 3: Valid 2FA OTP Verification** | Timing-safe verification, active session creation in `active_sessions`, device fingerprint association, successful login audit logging | ✅ PASS |
+| **TEST 4: Unverified Email Nag Prompt** | Banner presence check across owner portal, link to settings `#registeredEmailSection` | ✅ PASS |
+| **TEST 5: Registered Email Setup** | OTP dispatch to new email, 60-second cooldown rate limit enforcement, OTP verification, DB update (`verified = 1`), instant disappearance of nag banner | ✅ PASS |
+| **TEST 6: Forgot Password from Login** | Recovery OTP dispatch to registered email, new password submission (min 6 chars + confirmation), password hash update in DB, old password rejection, new password login | ✅ PASS |
+| **TEST 7: Brute-Force Rate Limiting** | 5 consecutive failed logins trigger 15-minute IP lockout with descriptive error message | ✅ PASS |
+| **TEST 8: Session Management** | Concurrent multi-device session tracking, remote device session revocation, immediate kickoff on next request (`login.php?reason=revoked`) | ✅ PASS |
+| **TEST 9: Expired OTP Midnight Purge** | Automatic cleanup of expired OTPs from `otps` table via `cleanExpiredOtps()` | ✅ PASS |
+
 ---
 
 ## 📈 Automated Verification Suite Results

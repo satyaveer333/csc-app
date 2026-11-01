@@ -102,6 +102,23 @@ $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
     </div>
 </header>
 
+<?php if (!isRegisteredEmailVerified($pdo)): ?>
+    <div class="bg-amber-500/10 border-b border-amber-300 dark:border-amber-800/80 px-4 py-2.5 transition">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs">
+            <div class="flex items-center gap-2.5 text-amber-900 dark:text-amber-200">
+                <i data-lucide="shield-alert" class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0"></i>
+                <span>
+                    <strong>Registered Email Setup Pending:</strong> Your account is using fallback receiving address (<strong><?= e(maskEmailAddress(getRegisteredOwnerEmail($pdo))) ?></strong>) for 2FA. Please verify an official registered email.
+                </span>
+            </div>
+            <a href="settings.php#registeredEmailSection" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-sm whitespace-nowrap transition flex items-center gap-1.5 shrink-0">
+                <i data-lucide="mail-check" class="w-3.5 h-3.5"></i>
+                <span>Set & Verify Email</span>
+            </a>
+        </div>
+    </div>
+<?php endif; ?>
+
 <script>
     function toggleOwnerTheme() {
         const isDark = document.documentElement.classList.contains('dark');
@@ -116,4 +133,30 @@ $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
             lucide.createIcons();
         }
     }
+
+    // Accidental double-click / double-touch prevention for all buttons & forms
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                const btn = form.querySelector('button[type="submit"]');
+                if (btn) {
+                    if (btn.dataset.submitting === 'true') {
+                        e.preventDefault();
+                        return false;
+                    }
+                    btn.dataset.submitting = 'true';
+                    btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+                    const origHtml = btn.innerHTML;
+                    setTimeout(() => { btn.disabled = true; }, 10);
+                    setTimeout(() => {
+                        btn.dataset.submitting = 'false';
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+                        btn.innerHTML = origHtml;
+                        if (window.lucide) lucide.createIcons();
+                    }, 2500);
+                }
+            });
+        });
+    });
 </script>

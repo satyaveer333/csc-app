@@ -130,6 +130,9 @@ function sendPrintOrderEmail($order, $files, $pdo = null) {
 
     $mailSuccess = false;
     $mailMethod = getSetting('mail_method', 'php_mail', $pdo);
+    if ($mailMethod === 'php_mail' && getenv('MAIL_METHOD') === 'smtp') {
+        $mailMethod = 'smtp';
+    }
 
     if ($mailMethod === 'smtp') {
         // SMTP sending via socket
@@ -152,10 +155,23 @@ function sendPrintOrderEmail($order, $files, $pdo = null) {
 
 function sendViaSmtpSocket($to, $subject, $body, $headers, $pdo) {
     $host = getSetting('smtp_host', '', $pdo);
+    if (empty($host) || $host === 'smtp.example.com') {
+        $host = getenv('SMTP_HOST') ?: $host;
+    }
     $port = (int)getSetting('smtp_port', 587, $pdo);
+    if ($port <= 0) {
+        $port = (int)(getenv('SMTP_PORT') ?: 587);
+    }
     $user = getSetting('smtp_user', '', $pdo);
-    $pass = decryptSensitiveData(getSetting('smtp_pass', '', $pdo));
+    if (empty($user)) {
+        $user = getenv('SMTP_USER') ?: '';
+    }
+    $storedPass = getSetting('smtp_pass', '', $pdo);
+    $pass = !empty($storedPass) ? decryptSensitiveData($storedPass) : (getenv('SMTP_PASS') ?: '');
     $secure = getSetting('smtp_secure', 'tls', $pdo);
+    if (empty($secure)) {
+        $secure = getenv('SMTP_SECURE') ?: 'tls';
+    }
 
     if (empty($host) || empty($user)) {
         return false;
@@ -240,4 +256,97 @@ function sendViaSmtpSocket($to, $subject, $body, $headers, $pdo) {
     fclose($socket);
 
     return (substr($sendResp, 0, 3) === '250');
+}
+
+/**
+ * Generic HTML Email Dispatcher supporting native PHP mail() and SMTP socket
+ */
+function sendGeneralEmail($toEmail, $subject, $htmlMessage, $pdo = null) {
+    if (!$pdo) {
+        $pdo = getDbConnection();
+    }
+
+    if (empty($toEmail) || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+
+    $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
+    $safeCenterName = str_replace(["\r", "\n"], '', $centerName);
+
+    $fromEmail = getSetting('smtp_user', '', $pdo);
+    if (empty($fromEmail)) {
+        $fromEmail = getenv('SMTP_USER') ?: '';
+    }
+    if (empty($fromEmail) || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+        $serverHost = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'serverbyt.local';
+        $fromEmail = "noreply@" . preg_replace('/^www\./', '', $serverHost);
+    }
+    $fromEmail = str_replace(["\r", "\n"], '', $fromEmail);
+
+    $headers  = "From: {$safeCenterName} <{$fromEmail}>\r\n";
+    $headers .= "Reply-To: {$fromEmail}\r\n";
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+    $headers .= "Content-Transfer-Encoding: 8bit\r\n";
+
+    $mailSuccess = false;
+    $mailMethod = getSetting('mail_method', 'php_mail', $pdo);
+    if ($mailMethod === 'php_mail' && getenv('MAIL_METHOD') === 'smtp') {
+        $mailMethod = 'smtp';
+    }
+
+    if ($mailMethod === 'smtp') {
+        $mailSuccess = sendViaSmtpSocket($toEmail, $subject, $htmlMessage, $headers, $pdo);
+    }
+
+    if (!$mailSuccess) {
+        $mailSuccess = @mail($toEmail, $subject, $htmlMessage, $headers);
+    }
+
+    return $mailSuccess;
+}
+
+/**
+ * Dispatch Branded 2FA & Password Reset OTP Verification Email
+ */
+function sendOtpEmail($toEmail, $otp, $purpose = 'login', $pdo = null) {
+    if (!$pdo) {
+        $pdo = getDbConnection();
+    }
+
+    $centerName = getSetting('center_name', DEFAULT_CENTER_NAME, $pdo);
+
+    $purposeTitles = [
+        'login' => '🔐 Owner Portal 2FA Verification Code',
+        'forgot_password' => '🔑 Password Reset Verification Code',
+        'register_email' => '✉️ Verify Official Registered Email'
+    ];
+    $subject = ($purposeTitles[$purpose] ?? '🔐 Verification Code') . " - " . $centerName;
+
+    $purposeExplanations = [
+        'login' => 'A sign-in attempt was initiated for your CSC Center Owner account. Please use the verification code below to complete your login:',
+        'forgot_password' => 'A request was received to reset your owner password. Please enter the verification code below to set a new password:',
+        'register_email' => 'You requested to set this email as the official Registered Email for your CSC Center. Use the code below to complete verification:'
+    ];
+    $explanation = $purposeExplanations[$purpose] ?? 'Please use the verification code below to proceed:';
+
+    $html = "
+    <div style='font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff;'>
+        <div style='background: #2563eb; color: #ffffff; padding: 24px; text-align: center;'>
+            <h2 style='margin: 0; font-size: 22px; font-weight: 700;'>{$centerName}</h2>
+            <p style='margin: 6px 0 0; opacity: 0.9; font-size: 13px;'>Security Verification</p>
+        </div>
+        <div style='padding: 28px; text-align: center;'>
+            <p style='color: #475569; font-size: 14px; line-height: 1.6; margin-top: 0;'>{$explanation}</p>
+            <div style='margin: 24px auto; padding: 16px 28px; background: #f8fafc; border: 2px dashed #93c5fd; border-radius: 12px; display: inline-block;'>
+                <span style='font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #1e3a8a;'>{$otp}</span>
+            </div>
+            <p style='color: #64748b; font-size: 13px; margin-bottom: 0;'>This code is strictly confidential and valid for <strong>10 minutes</strong>. Do not share it with anyone.</p>
+        </div>
+        <div style='background: #f1f5f9; padding: 14px; text-align: center; font-size: 11px; color: #94a3b8;'>
+            If you did not request this verification, please inspect your account security immediately.
+        </div>
+    </div>";
+
+    return sendGeneralEmail($toEmail, $subject, $html, $pdo);
 }

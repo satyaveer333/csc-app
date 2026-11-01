@@ -231,10 +231,126 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: settings.php');
         exit;
     }
+
+    // 6. REGISTERED EMAIL: DISPATCH OTP
+    if ($action === 'send_reg_email_otp') {
+        $newEmail = strtolower(trim($_POST['new_registered_email'] ?? ''));
+        if (!filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
+            setFlash('danger', 'Please enter a valid email address.');
+        } else {
+            $otpRes = generateAndSendOtp($newEmail, 'register_email', $pdo);
+            if ($otpRes['success']) {
+                $_SESSION['pending_reg_email'] = $newEmail;
+                setFlash('success', 'Verification code dispatched to ' . htmlspecialchars($newEmail) . '. Please enter the 6-digit code below to confirm.');
+            } else {
+                setFlash('danger', $otpRes['message']);
+            }
+        }
+        header('Location: settings.php#registeredEmailSection');
+        exit;
+    }
+
+    // 7. REGISTERED EMAIL: VERIFY OTP
+    if ($action === 'verify_reg_email_otp') {
+        $pendingEmail = $_SESSION['pending_reg_email'] ?? '';
+        $inputOtp = trim($_POST['reg_email_otp'] ?? '');
+
+        if (empty($pendingEmail) || empty($inputOtp)) {
+            setFlash('danger', 'Please provide the verification code.');
+        } else {
+            $verifyRes = verifyOtp($pendingEmail, $inputOtp, 'register_email', $pdo);
+            if ($verifyRes['success']) {
+                updateSetting('registered_owner_email', $pendingEmail, $pdo);
+                updateSetting('registered_owner_email_verified', '1', $pdo);
+                unset($_SESSION['pending_reg_email']);
+                setFlash('success', 'Official Registered Email verified and updated successfully!');
+            } else {
+                setFlash('danger', $verifyRes['message']);
+            }
+        }
+        header('Location: settings.php#registeredEmailSection');
+        exit;
+    }
+
+    if ($action === 'cancel_reg_email_otp') {
+        unset($_SESSION['pending_reg_email']);
+        setFlash('info', 'Email verification cancelled.');
+        header('Location: settings.php#registeredEmailSection');
+        exit;
+    }
+
+    // 8. FORGOT PASSWORD IN SETTINGS: SEND OTP
+    if ($action === 'send_settings_reset_otp') {
+        $destEmail = getRegisteredOwnerEmail($pdo);
+        $res = generateAndSendOtp($destEmail, 'forgot_password', $pdo);
+        if ($res['success']) {
+            $_SESSION['settings_reset_pending'] = true;
+            setFlash('success', 'Password reset code dispatched to registered email (' . maskEmailAddress($destEmail) . ').');
+        } else {
+            setFlash('danger', $res['message']);
+        }
+        header('Location: settings.php#passwordSection');
+        exit;
+    }
+
+    // 9. FORGOT PASSWORD IN SETTINGS: SUBMIT NEW PASSWORD
+    if ($action === 'reset_password_with_otp') {
+        $destEmail = getRegisteredOwnerEmail($pdo);
+        $inputOtp = trim($_POST['reset_otp'] ?? '');
+        $newPass = $_POST['new_password_otp'] ?? '';
+        $confirmPass = $_POST['confirm_password_otp'] ?? '';
+
+        if (empty($inputOtp)) {
+            setFlash('danger', 'Please enter the 6-digit verification code.');
+        } elseif (strlen($newPass) < 6) {
+            setFlash('danger', 'New password must be at least 6 characters long.');
+        } elseif ($newPass !== $confirmPass) {
+            setFlash('danger', 'New password and confirmation do not match.');
+        } else {
+            $verifyRes = verifyOtp($destEmail, $inputOtp, 'forgot_password', $pdo);
+            if ($verifyRes['success']) {
+                $newHash = password_hash($newPass, PASSWORD_DEFAULT);
+                updateSetting('admin_password', $newHash, $pdo);
+                unset($_SESSION['settings_reset_pending']);
+                logLoginAttempt(getSetting('admin_username', DEFAULT_ADMIN_USER, $pdo), 'password_reset', 'Reset via settings OTP', '', $pdo);
+                setFlash('success', 'Password updated successfully via registered email code!');
+            } else {
+                setFlash('danger', $verifyRes['message']);
+            }
+        }
+        header('Location: settings.php#passwordSection');
+        exit;
+    }
+
+    // 10. SESSION MANAGEMENT: REVOKE SINGLE SESSION
+    if ($action === 'revoke_session') {
+        $targetSessionId = trim($_POST['target_session_id'] ?? '');
+        if ($targetSessionId === session_id()) {
+            setFlash('warning', 'You cannot revoke your active current session from here. Use the Logout button instead.');
+        } elseif (!empty($targetSessionId)) {
+            revokeSession($targetSessionId, $pdo);
+            setFlash('success', 'Remote device session has been revoked and signed out.');
+        }
+        header('Location: settings.php#activeSessionsSection');
+        exit;
+    }
+
+    // 11. SESSION MANAGEMENT: REVOKE ALL OTHER SESSIONS
+    if ($action === 'revoke_all_other_sessions') {
+        revokeAllOtherSessions(session_id(), $pdo);
+        setFlash('success', 'All other active remote sessions have been revoked.');
+        header('Location: settings.php#activeSessionsSection');
+        exit;
+    }
 }
 
 $settings = getSettings($pdo);
 $flash = getFlash();
+$registeredEmail = getRegisteredOwnerEmail($pdo);
+$isEmailVerified = isRegisteredEmailVerified($pdo);
+$activeSessions = getActiveSessions($pdo);
+$recentLogs = getRecentLoginLogs(8, $pdo);
+$currentSessionId = session_id();
 
 $weekdaysList = ['Mon' => 'Monday', 'Tue' => 'Tuesday', 'Wed' => 'Wednesday', 'Thu' => 'Thursday', 'Fri' => 'Friday', 'Sat' => 'Saturday', 'Sun' => 'Sunday'];
 
@@ -417,7 +533,87 @@ $cleanOwnerPhoneDisplay = strlen($rawStoredPhone) >= 10 ? substr($rawStoredPhone
             </form>
         </div>
 
-        <!-- 2. Email & Print Order Notifications (With Developer Confirmation) -->
+        <!-- 2. Registered Owner Email (2FA & Recovery) -->
+        <div id="registeredEmailSection" class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <h2 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <i data-lucide="shield-alert" class="w-5 h-5 <?= $isEmailVerified ? 'text-emerald-500' : 'text-amber-500' ?>"></i>
+                    <span>Registered Owner Email (2FA & Recovery)</span>
+                </h2>
+                <div>
+                    <?php if ($isEmailVerified): ?>
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                            <span>Verified</span>
+                        </span>
+                    <?php else: ?>
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                            <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+                            <span>Action Required: Unverified</span>
+                        </span>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                This registered email is exclusively used to deliver <strong>Two-Factor Authentication (2FA)</strong> OTP login verification codes and authorize <strong>Password Reset</strong>. It cannot be altered without completing 6-digit OTP verification.
+            </p>
+
+            <?php if (!empty($_SESSION['pending_reg_email'])): ?>
+                <!-- Pending Verification OTP Form -->
+                <div class="p-4 rounded-xl border border-blue-200 dark:border-blue-800/80 bg-blue-50/70 dark:bg-blue-950/40 space-y-4">
+                    <div>
+                        <span class="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wider block">Verify Email Code</span>
+                        <p class="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                            A 6-digit confirmation code was sent to <strong class="font-mono"><?= e($_SESSION['pending_reg_email']) ?></strong>.
+                        </p>
+                    </div>
+
+                    <form method="POST" class="space-y-4">
+                        <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+                        <input type="hidden" name="action" value="verify_reg_email_otp">
+
+                        <div class="max-w-xs">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Enter 6-Digit OTP</label>
+                            <input type="text" name="reg_email_otp" required maxlength="6" pattern="[0-9]{6}" placeholder="123456" autofocus
+                                   class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-center text-lg font-mono tracking-widest text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500">
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3 pt-1">
+                            <button type="submit" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm shadow-sm transition">
+                                Confirm & Save Registered Email
+                            </button>
+                            <button type="submit" formaction="settings.php" name="action" value="cancel_reg_email_otp" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            <?php else: ?>
+                <form method="POST" class="space-y-4">
+                    <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+                    <input type="hidden" name="action" value="send_reg_email_otp">
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                                Official Registered Email Address
+                            </label>
+                            <input type="email" name="new_registered_email" required value="<?= e($registeredEmail) ?>" placeholder="owner@gmail.com"
+                                   class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <button type="submit" class="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm shadow-sm transition flex items-center justify-center gap-2">
+                                <i data-lucide="send" class="w-4 h-4"></i>
+                                <span><?= $isEmailVerified ? 'Change & Verify' : 'Send Verification OTP' ?></span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            <?php endif; ?>
+        </div>
+
+        <!-- 3. Email & Print Order Notifications (With Developer Confirmation) -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 shadow-sm">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <h2 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -566,12 +762,18 @@ $cleanOwnerPhoneDisplay = strlen($rawStoredPhone) >= 10 ? substr($rawStoredPhone
         </div>
 
         <!-- 4. Security & Change Password -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 shadow-sm">
-            <h2 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-4">
-                <i data-lucide="lock" class="w-5 h-5 text-red-500"></i>
-                <span>Change Owner Password</span>
-            </h2>
+        <div id="passwordSection" class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 shadow-sm space-y-6">
+            <div>
+                <h2 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
+                    <i data-lucide="lock" class="w-5 h-5 text-red-500"></i>
+                    <span>Change Owner Password</span>
+                </h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Update your account login password using your current password or via OTP verification sent to your registered email.
+                </p>
+            </div>
 
+            <!-- Standard Password Change Form -->
             <form method="POST" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
                 <input type="hidden" name="action" value="change_password">
@@ -600,12 +802,238 @@ $cleanOwnerPhoneDisplay = strlen($rawStoredPhone) >= 10 ? substr($rawStoredPhone
                     </button>
                 </div>
             </form>
+
+            <!-- Forgot Password via Registered Email Recovery Flow -->
+            <div class="border-t border-slate-200 dark:border-slate-700/80 pt-5 space-y-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="key-round" class="w-4 h-4 text-amber-500"></i>
+                    <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                        Forgot Current Password? Reset with Email OTP
+                    </h3>
+                </div>
+
+                <?php if (!empty($_SESSION['settings_reset_pending'])): ?>
+                    <div class="p-4 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/40 space-y-4">
+                        <p class="text-xs text-amber-800 dark:text-amber-300">
+                            A 6-digit password reset code was dispatched to your registered email (<strong><?= e(maskEmailAddress($registeredEmail)) ?></strong>). Enter the code and set your new password below.
+                        </p>
+
+                        <form method="POST" class="space-y-4">
+                            <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+                            <input type="hidden" name="action" value="reset_password_with_otp">
+
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">6-Digit OTP Code</label>
+                                    <input type="text" name="reset_otp" required maxlength="6" pattern="[0-9]{6}" placeholder="123456" autofocus
+                                           class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-center text-sm font-mono tracking-widest text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">New Password</label>
+                                    <input type="password" name="new_password_otp" required minlength="6" placeholder="At least 6 characters"
+                                           class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-amber-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Confirm Password</label>
+                                    <input type="password" name="confirm_password_otp" required minlength="6" placeholder="Repeat new password"
+                                           class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-amber-500">
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-3 pt-1">
+                                <button type="submit" class="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-sm shadow-sm transition">
+                                    Set New Password
+                                </button>
+                                <button type="submit" formaction="settings.php" name="action" value="send_settings_reset_otp" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition">
+                                    Resend Code
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                <?php else: ?>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                        <span class="text-xs text-slate-600 dark:text-slate-400">
+                            Forgot your current password? Request a one-time verification code to your registered email (<strong><?= e(maskEmailAddress($registeredEmail)) ?></strong>) to set a new password directly.
+                        </span>
+                        <form method="POST" class="shrink-0">
+                            <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+                            <input type="hidden" name="action" value="send_settings_reset_otp">
+                            <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5">
+                                <i data-lucide="mail" class="w-3.5 h-3.5"></i>
+                                <span>Send Reset OTP</span>
+                            </button>
+                        </form>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- 5. Active Sessions & Device Security Management -->
+        <div id="activeSessionsSection" class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 shadow-sm space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-4">
+                <div>
+                    <h2 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i data-lucide="laptop" class="w-5 h-5 text-indigo-500"></i>
+                        <span>Active Sessions & Device Security</span>
+                    </h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Manage devices currently signed into the Owner Portal. Revoking a session will immediately kick out and sign out that device.
+                    </p>
+                </div>
+
+                <?php if (count($activeSessions) > 1): ?>
+                    <form method="POST" onsubmit="return confirm('Are you sure you want to log out all other devices?');">
+                        <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+                        <input type="hidden" name="action" value="revoke_all_other_sessions">
+                        <button type="submit" class="px-4 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition">
+                            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                            <span>Log Out All Other Devices</span>
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </div>
+
+            <!-- Active Sessions List -->
+            <div class="space-y-3">
+                <span class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Currently Signed-In Devices (<?= count($activeSessions) ?>)</span>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <?php foreach ($activeSessions as $s): ?>
+                        <?php 
+                        $isCurrent = ($s['session_id'] === $currentSessionId);
+                        $deviceIcon = 'monitor';
+                        if ($s['device_type'] === 'mobile') $deviceIcon = 'smartphone';
+                        elseif ($s['device_type'] === 'tablet') $deviceIcon = 'tablet';
+                        ?>
+                        <div class="p-4 rounded-xl border <?= $isCurrent ? 'border-indigo-300 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-950/20' : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40' ?> flex items-start justify-between gap-3">
+                            <div class="flex items-start gap-3">
+                                <div class="w-10 h-10 rounded-xl <?= $isCurrent ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400' ?> flex items-center justify-center shrink-0">
+                                    <i data-lucide="<?= $deviceIcon ?>" class="w-5 h-5"></i>
+                                </div>
+                                <div class="space-y-0.5">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-bold text-slate-900 dark:text-white">
+                                            <?= e($s['browser'] ?: 'Browser') ?> on <?= e($s['platform'] ?: 'Device') ?>
+                                        </span>
+                                        <?php if ($isCurrent): ?>
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/80 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                                This Device
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
+                                        <p><span class="font-semibold text-slate-600 dark:text-slate-300">IP:</span> <?= e($s['ip_address'] ?: 'Unknown') ?></p>
+                                        <p><span class="font-semibold text-slate-600 dark:text-slate-300">Fingerprint:</span> <span class="font-mono"><?= e(substr($s['device_fingerprint'] ?? 'N/A', 0, 16)) ?>...</span></p>
+                                        <p><span class="font-semibold text-slate-600 dark:text-slate-300">Active:</span> <?= e(date('M d, H:i', strtotime($s['last_activity'] ?? $s['created_at']))) ?></p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <?php if (!$isCurrent): ?>
+                                    <form method="POST" onsubmit="return confirm('Revoke access for this device?');">
+                                        <input type="hidden" name="csrf_token" value="<?= e(getCsrfToken()) ?>">
+                                        <input type="hidden" name="action" value="revoke_session">
+                                        <input type="hidden" name="target_session_id" value="<?= e($s['session_id']) ?>">
+                                        <button type="submit" class="px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/30 border border-slate-300 dark:border-slate-700 rounded-lg shadow-sm transition">
+                                            Revoke
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <!-- Login Audit Log -->
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-4 space-y-3">
+                <span class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Recent Login Activity Audit (Last 8 Records)</span>
+                
+                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="py-2.5 px-3">Time</th>
+                                <th class="py-2.5 px-3">Username</th>
+                                <th class="py-2.5 px-3">IP Address</th>
+                                <th class="py-2.5 px-3">Fingerprint</th>
+                                <th class="py-2.5 px-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px]">
+                            <?php if (empty($recentLogs)): ?>
+                                <tr>
+                                    <td colspan="5" class="py-4 text-center text-slate-400 font-sans">No login logs recorded yet.</td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($recentLogs as $log): ?>
+                                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                                        <td class="py-2 px-3 text-slate-500 whitespace-nowrap font-sans">
+                                            <?= e(date('M d, H:i:s', strtotime($log['created_at']))) ?>
+                                        </td>
+                                        <td class="py-2 px-3 text-slate-800 dark:text-slate-200 whitespace-nowrap font-sans">
+                                            <?= e($log['username']) ?>
+                                        </td>
+                                        <td class="py-2 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                                            <?= e($log['ip_address']) ?>
+                                        </td>
+                                        <td class="py-2 px-3 text-slate-500 whitespace-nowrap" title="<?= e($log['device_fingerprint']) ?>">
+                                            <?= e(substr($log['device_fingerprint'] ?: 'N/A', 0, 12)) ?>...
+                                        </td>
+                                        <td class="py-2 px-3 whitespace-nowrap font-sans">
+                                            <?php if ($log['status'] === 'success'): ?>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
+                                                    Success
+                                                </span>
+                                            <?php elseif ($log['status'] === 'otp_dispatched'): ?>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300">
+                                                    OTP Sent
+                                                </span>
+                                            <?php elseif ($log['status'] === 'password_reset'): ?>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300">
+                                                    Password Reset
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300" title="<?= e($log['failure_reason']) ?>">
+                                                    Failed (<?= e($log['failure_reason'] ?: 'invalid') ?>)
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
     </main>
 
     <script>
         lucide.createIcons();
+
+        // Accidental double-click / double-touch prevention on all forms
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                if (this.dataset.submitting === 'true') {
+                    e.preventDefault();
+                    return false;
+                }
+                const btn = this.querySelector('button[type="submit"]');
+                if (btn) {
+                    this.dataset.submitting = 'true';
+                    btn.classList.add('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+                    setTimeout(() => { btn.disabled = true; }, 10);
+                    setTimeout(() => {
+                        this.dataset.submitting = 'false';
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-60', 'cursor-not-allowed', 'pointer-events-none');
+                    }, 2500);
+                }
+            });
+        });
 
         function toggleSmtpFields() {
             const val = document.getElementById('mailMethodSelect').value;

@@ -26,6 +26,7 @@ function getDbConnection() {
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
             $pdo->exec('PRAGMA foreign_keys = ON;');
+            $pdo->exec('PRAGMA journal_mode = WAL;');
         } else {
             $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', DB_HOST, DB_PORT, DB_NAME, DB_CHARSET);
             $pdo = new PDO($dsn, DB_USER, DB_PASS, [
@@ -144,6 +145,50 @@ function initDatabaseTables($pdo) {
         )$tableOptions;
     ");
 
+    // 5. OTPs Table (hashed OTPs with expiration and attempt limits)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS otps (
+            id $autoInc,
+            email VARCHAR(150) NOT NULL,
+            otp_hash VARCHAR(64) NOT NULL,
+            purpose VARCHAR(50) NOT NULL,
+            attempts INT NOT NULL DEFAULT 0,
+            max_attempts INT NOT NULL DEFAULT 5,
+            expires_at DATETIME NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )$tableOptions;
+    ");
+
+    // 6. Login & Security Audit Logs Table
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS login_logs (
+            id $autoInc,
+            username VARCHAR(100) NOT NULL,
+            ip_address VARCHAR(45) NOT NULL,
+            user_agent TEXT,
+            device_fingerprint VARCHAR(64) NOT NULL,
+            status VARCHAR(30) NOT NULL,
+            failure_reason VARCHAR(255) DEFAULT '',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )$tableOptions;
+    ");
+
+    // 7. Active Sessions Table (Session Management & Device Tracking)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS active_sessions (
+            id $autoInc,
+            session_id VARCHAR(128) UNIQUE NOT NULL,
+            device_fingerprint VARCHAR(64) NOT NULL,
+            ip_address VARCHAR(45) NOT NULL,
+            user_agent TEXT,
+            device_type VARCHAR(50) DEFAULT 'Desktop',
+            browser VARCHAR(50) DEFAULT 'Browser',
+            platform VARCHAR(50) DEFAULT 'Unknown',
+            last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )$tableOptions;
+    ");
+
     // Seed default settings if empty
     $stmt = $pdo->query("SELECT COUNT(*) FROM settings");
     if ($stmt->fetchColumn() == 0) {
@@ -170,6 +215,8 @@ function initDatabaseTables($pdo) {
             'smtp_pass' => '',
             'smtp_secure' => 'tls',
             'developer_email_hash' => DEFAULT_DEVELOPER_EMAIL_HASH,
+            'registered_owner_email' => '',
+            'registered_owner_email_verified' => '0',
         ];
 
         $ins = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (:k, :v)");
@@ -179,6 +226,16 @@ function initDatabaseTables($pdo) {
     } else {
         // Upgrade existing install if it has old default name
         $pdo->exec("UPDATE settings SET setting_value = 'Digital Solutions' WHERE setting_key = 'center_name' AND (setting_value LIKE '%Jan Seva Kendra%' OR setting_value = '')");
+
+        // Ensure registered 2FA email settings exist
+        $chk = $pdo->query("SELECT COUNT(*) FROM settings WHERE setting_key = 'registered_owner_email'");
+        if ($chk && $chk->fetchColumn() == 0) {
+            $pdo->exec("INSERT INTO settings (setting_key, setting_value) VALUES ('registered_owner_email', '')");
+        }
+        $chk2 = $pdo->query("SELECT COUNT(*) FROM settings WHERE setting_key = 'registered_owner_email_verified'");
+        if ($chk2 && $chk2->fetchColumn() == 0) {
+            $pdo->exec("INSERT INTO settings (setting_key, setting_value) VALUES ('registered_owner_email_verified', '0')");
+        }
     }
 
     // Seed sample forms if empty

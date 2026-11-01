@@ -47,7 +47,9 @@ INSERT INTO `settings` (`setting_key`, `setting_value`) VALUES
   ('smtp_user', ''),
   ('smtp_pass', ''),
   ('smtp_secure', 'tls'),
-  ('developer_email_hash', '0dc6d2bc23045997492ae6458d7626550d2af7f225663466561342c5d71384f7');
+  ('developer_email_hash', '0dc6d2bc23045997492ae6458d7626550d2af7f225663466561342c5d71384f7'),
+  ('registered_owner_email', ''),
+  ('registered_owner_email_verified', '0');
 
 -- --------------------------------------------------------------------
 -- 2. Table structure for table `forms`
@@ -144,6 +146,61 @@ CREATE TABLE `print_orders` (
   KEY `idx_orders_customer_phone` (`customer_phone`),
   KEY `idx_orders_status` (`status`),
   KEY `idx_orders_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------
+-- 5. Table structure for table `otps`
+-- --------------------------------------------------------------------
+DROP TABLE IF EXISTS `otps`;
+CREATE TABLE `otps` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `email` VARCHAR(150) NOT NULL,
+  `otp_hash` VARCHAR(64) NOT NULL,
+  `purpose` VARCHAR(50) NOT NULL,
+  `attempts` INT NOT NULL DEFAULT 0,
+  `max_attempts` INT NOT NULL DEFAULT 5,
+  `expires_at` DATETIME NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_otps_lookup` (`email`, `purpose`, `expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------
+-- 6. Table structure for table `login_logs`
+-- --------------------------------------------------------------------
+DROP TABLE IF EXISTS `login_logs`;
+CREATE TABLE `login_logs` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `username` VARCHAR(100) NOT NULL,
+  `ip_address` VARCHAR(45) NOT NULL,
+  `user_agent` TEXT NULL,
+  `device_fingerprint` VARCHAR(64) NOT NULL,
+  `status` VARCHAR(30) NOT NULL,
+  `failure_reason` VARCHAR(255) NOT NULL DEFAULT '',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_logs_ip` (`ip_address`, `created_at`),
+  KEY `idx_logs_username` (`username`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------
+-- 7. Table structure for table `active_sessions`
+-- --------------------------------------------------------------------
+DROP TABLE IF EXISTS `active_sessions`;
+CREATE TABLE `active_sessions` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `session_id` VARCHAR(128) NOT NULL,
+  `device_fingerprint` VARCHAR(64) NOT NULL,
+  `ip_address` VARCHAR(45) NOT NULL,
+  `user_agent` TEXT NULL,
+  `device_type` VARCHAR(50) NOT NULL DEFAULT 'Desktop',
+  `browser` VARCHAR(50) NOT NULL DEFAULT 'Browser',
+  `platform` VARCHAR(50) NOT NULL DEFAULT 'Unknown',
+  `last_activity` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_sessions_id` (`session_id`),
+  KEY `idx_sessions_last_activity` (`last_activity`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
